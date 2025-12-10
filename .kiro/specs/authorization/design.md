@@ -96,6 +96,7 @@ sequenceDiagram
     participant API as API Client
     participant Backend as AuthRouter
     participant Service as AuthService
+    participant PwdRepo as PasswordRepository
     participant Token as TokenService
     participant DB as PostgreSQL
 
@@ -104,9 +105,11 @@ sequenceDiagram
     useAuth->>API: POST /api/v1/auth/login
     API->>Backend: LoginRequest
     Backend->>Service: login(password)
-    Service->>DB: パスワードハッシュ取得
-    DB-->>Service: password_hash
-    Service->>Service: bcrypt検証
+    Service->>PwdRepo: verify_password(password)
+    PwdRepo->>DB: パスワードハッシュ取得
+    DB-->>PwdRepo: password_hash
+    PwdRepo->>PwdRepo: bcrypt検証
+    PwdRepo-->>Service: is_valid: bool
     alt パスワード正しい
         Service->>Token: generateTokens()
         Token-->>Service: access_token, refresh_token

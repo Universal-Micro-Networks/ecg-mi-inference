@@ -5,35 +5,28 @@
 **ドメイン駆動設計（DDD）** を採用し、ビジネスロジックをドメイン層に集約。
 フロントエンド・バックエンド分離のクライアント/サーバー型アーキテクチャ。
 
-```
-┌─────────────────┐   REST API   ┌─────────────────┐     ┌────────────┐
-│    Frontend     │ ←──────────→ │     Backend     │ ←─→ │ PostgreSQL │
-│  (React/MVVM)   │              │ (FastAPI/Layered)│     │            │
-└─────────────────┘              └─────────────────┘     └────────────┘
-                                         ↓
-                                   ┌───────────┐
-                                   │  MFER     │
-                                   │  Watcher  │
-                                   └───────────┘
+```mermaid
+flowchart LR
+  FE[(Frontend React/MVVM)]
+  BE[(Backend FastAPI/Layered)]
+  DB[(PostgreSQL)]
+  MFER[MFER+nWatcher]
+
+  FE <--> |REST API| BE
+  BE <--> DB
+  BE --> MFER
 ```
 
 ### Frontend: MVVM アーキテクチャ
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      View Layer                         │
-│  React Components (*.tsx) - 純粋なUI描画                │
-└─────────────────────────────────────────────────────────┘
-                          ↓ ↑
-┌─────────────────────────────────────────────────────────┐
-│                   ViewModel Layer                       │
-│  Custom Hooks (use*.ts) - 状態管理・ロジック・API呼び出し │
-└─────────────────────────────────────────────────────────┘
-                          ↓ ↑
-┌─────────────────────────────────────────────────────────┐
-│                     Model Layer                         │
-│  API Client (Orval生成) + Domain Types                  │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  V[View Layer React Components （O*.tsx）- 純粋なUI描画]
+  VM[ViewModel Layer\nCustom Hooks （use*.ts）- 状態管理・ロジック・API呼び出し]
+  M[Model Layer API Client （Orval生成） + Domain Types]
+
+  V <--> VM
+  VM <--> M
 ```
 
 | Layer | 責務 | 実装 |
@@ -44,27 +37,15 @@
 
 ### Backend: Layered アーキテクチャ（DDD準拠）
 
-```
-┌─────────────────────────────────────────────────────────┐
-│              Presentation Layer (API)                   │
-│  FastAPI Routers - リクエスト/レスポンス処理             │
-└─────────────────────────────────────────────────────────┘
-                          ↓ ↑
-┌─────────────────────────────────────────────────────────┐
-│              Application Layer (Use Cases)              │
-│  Services - ユースケース実装、トランザクション管理        │
-└─────────────────────────────────────────────────────────┘
-                          ↓ ↑
-┌─────────────────────────────────────────────────────────┐
-│                Domain Layer (Core)                      │
-│  Entities, Value Objects, Domain Services               │
-│  ビジネスルール・不変条件                               │
-└─────────────────────────────────────────────────────────┘
-                          ↓ ↑
-┌─────────────────────────────────────────────────────────┐
-│             Infrastructure Layer                        │
-│  Repositories, External APIs, DB Access                 │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  P[Presentation Layer （API） FastAPI Routers - リクエスト/レスポンス処理]
+  A[Application Layer （Use Cases）　Services - ユースケース実装・トランザクション管理]
+  D[Domain Layer （Core）　Entities / Value Objects / Domain Services　ビジネスルール・不変条件]
+  I[Infrastructure Layer\nRepositories / External APIs / DB Access]
+
+  P --> A --> D
+  I --> D
 ```
 
 | Layer | 責務 | 依存方向 |
