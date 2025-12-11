@@ -8,7 +8,8 @@
 
 **責務境界:**
 - **folder-watcher（本機能）**: フォルダ監視、ファイル検出、拡張子判定、file-importer呼び出し
-- **file-importer（別機能）**: MFERファイル解析、患者・診察データのDB登録、CSV変換、Vision Transformer用画像変換
+- **file-importer**: MFERファイルから患者属性を抽出、患者・診察データのDB登録（検索用）、MFERファイルパスとの紐付け
+- **ecg-mi-inferencer（別途定義）**: 心電図波形の読み込み、CSV変換、画像変換、心筋梗塞リスク推論
 
 **関連ユースケース:** UC-1（システムは指定フォルダを監視し、新規MFERデータ追加時に診察データ・患者データをDBへ自動登録する）の「監視・検出」部分
 
@@ -141,17 +142,21 @@
 
 ---
 
-## スコープ外（file-importerの責務）
+## スコープ外
 
-以下の機能は本機能のスコープ外であり、`file-importer` サービスで実装する：
+以下の機能は本機能のスコープ外であり、他サービスで実装する：
 
-- MFERファイルの解析（バイナリパース）
-- 患者情報の抽出
-- 診察データの抽出
+**file-importerの責務:**
+- MFERファイルから患者属性の抽出
+- 患者・診察データのDB登録（検索用メタデータ）
+- MFERファイルパスとの紐付け
+- 処理済みファイルの移動
+
+**ecg-mi-inferencerの責務（別途定義）:**
+- MFERファイルから心電図波形データの読み込み
 - 心電図波形データのCSV変換
-- データベースへの登録
-- 処理済みファイルの移動（processed/errorフォルダ）
-- トランザクション管理
+- Vision Transformer用画像変換
+- 心筋梗塞リスク推論
 
 ---
 
@@ -162,7 +167,8 @@
 | MFER | Medical waveform Format Encoding Rules、医療波形データの標準フォーマット |
 | MWF | MFER形式ファイルの拡張子（.mwf） |
 | Watchdog | Pythonのファイルシステム監視ライブラリ |
-| file-importer | MFERファイルを解析しDBに登録する別サービス |
+| file-importer | MFERファイルから患者属性を抽出しDBに登録するサービス |
+| ecg-mi-inferencer | 心電図波形を解析し心筋梗塞リスクを推論するサービス |
 | 監視対象フォルダ | MFERファイルの配置先として監視するディレクトリ |
 
 ---
@@ -195,17 +201,25 @@ flowchart TB
         W --> E --> C
     end
 
-    subgraph FI["file-importer（別機能）"]
+    subgraph FI["file-importer"]
         direction LR
-        M["MFER解析"]
-        CSV["CSV変換"]
-        IMG["画像変換<br/>(ViT用)"]
-        DB["DB登録"]
+        M["MFER解析<br/>（患者属性のみ）"]
+        DB1["患者・診察<br/>DB登録"]
         MV["ファイル移動"]
-        M --> CSV --> IMG --> DB --> MV
+        M --> DB1 --> MV
+    end
+
+    subgraph INF["ecg-mi-inferencer（別途定義）"]
+        direction LR
+        ECG["心電図波形<br/>読み込み"]
+        CSV["CSV変換"]
+        IMG["画像変換"]
+        AI["MI推論"]
+        ECG --> CSV --> IMG --> AI
     end
 
     C -->|ファイルパス| M
+    DB1 -.->|診察UUID| INF
 ```
 
 ---
