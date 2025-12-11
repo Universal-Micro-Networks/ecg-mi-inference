@@ -91,17 +91,18 @@ flowchart TB
 - Backend: Python type hints 必須、pyrefly で型チェック
 
 ### Database
-- **プライマリーキー**: 全テーブルでUUID（`uuid.uuid4()`）を使用
+- **プライマリーキー**: 全テーブルでUUID（データベース側で生成）を使用
 - PostgreSQL の `UUID` 型を使用（文字列保存ではない）
 - SQLAlchemy での実装例:
   ```python
-  from sqlalchemy import Column
+  from sqlalchemy import Column, text
   from sqlalchemy.dialects.postgresql import UUID
-  import uuid
 
   class BaseModel:
-      id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+      id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
   ```
+
+  **注意:** `gen_random_uuid()`はPostgreSQL 13以降で標準機能として利用可能。データベース側でUUIDを生成することで、アプリケーション側とデータベース側で一貫性を保つ。
 
 ### Code Quality
 
