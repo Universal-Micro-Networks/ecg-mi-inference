@@ -48,7 +48,7 @@ frontend/
 │   │
 │   │  ─────────── ViewModel Layer ───────────
 │   ├── viewmodels/     # 共通ViewModel（Custom Hooks）
-│   │   └── useAuth.ts  # 認証ViewModel
+│   │   └── useAuth.ts  # 認可ViewModel
 │   │
 │   │  ─────────── View Layer ───────────
 │   ├── components/     # 共通UIコンポーネント（Presentational）
@@ -62,7 +62,7 @@ frontend/
 │   │  ─────────── Feature Modules ───────────
 │   ├── features/       # 機能単位モジュール（MVVM構成）
 │   │   ├── auth/
-│   │   │   ├── components/      # View: 認証UI
+│   │   │   ├── components/      # View: 認可UI
 │   │   │   ├── hooks/           # ViewModel: useLogin, useLogout
 │   │   │   └── index.ts
 │   │   ├── patients/
@@ -75,7 +75,7 @@ frontend/
 │   │   └── inference/
 │   │
 │   │  ─────────── Infrastructure ───────────
-│   ├── lib/            # ユーティリティ（認証ヘッダー等）
+│   ├── lib/            # ユーティリティ（（一般的な名称として）認証ヘッダー等、認可に用いる）
 │   ├── mocks/          # MSW APIモックハンドラー（Storybook/Test用）
 │   ├── test/           # テストユーティリティ
 │   │   └── setup.ts
@@ -167,7 +167,7 @@ backend/
 │   │  ─────────── Core ───────────
 │   ├── core/           # 横断的関心事
 │   │   ├── config.py   # 設定
-│   │   ├── security.py # 認証・認可
+│   │   ├── security.py # 認可
 │   │   └── exceptions.py # カスタム例外
 │   │
 │   └── main.py         # エントリーポイント
