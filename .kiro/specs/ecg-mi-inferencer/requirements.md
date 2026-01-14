@@ -3,16 +3,16 @@
 ## はじめに
 
 本ドキュメントは、ECG心筋梗塞リスク推論システムにおける心筋梗塞リスク推論機能の要件を定義する。
-本機能は、診察UUIDを受け取り、MFERファイルから心電図波形データを読み込み、Vision Transformerモデルを用いて
+本機能は、検査UUIDを受け取り、MFERファイルから心電図波形データを読み込み、Vision Transformerモデルを用いて
 心筋梗塞リスクを推論するバックエンドサービスである。
 
 **責務境界:**
 - **ecg-mi-inferencer（本機能）**: MFERファイルからの心電図波形読み込み、CSV変換、画像変換、AI推論実行、推論結果のDB登録
-- **file-importer**: 診察データのDB登録、MFERファイルパスの紐付け（本機能のデータソース）
-- **diagnosis-viewer**: 推論実行のトリガー、推論結果の表示
+- **file-importer**: 検査データのDB登録、MFERファイルパスの紐付け（本機能のデータソース）
+- **exam-viewer**: 推論実行のトリガー、推論結果の表示
 
 **関連ユースケース:**
-- UC-4-extend: システムはシステムユーザーの診察データ選択時に、心筋梗塞推論を実行する
+- UC-4-extend: システムはシステムユーザーの検査データ選択時に、心筋梗塞推論を実行する
 - Core Capability 2: 心電図データ変換パイプライン（MFER → CSV → 画像）
 - Core Capability 3: AI心筋梗塞リスク推論
 
@@ -22,15 +22,15 @@
 
 ### 要件1: 推論実行の受け付け
 
-**目的:** システムとして、診察UUIDを受け取り推論処理を開始したい。
-これにより、診察詳細画面から推論実行リクエストを処理できる。
+**目的:** システムとして、検査UUIDを受け取り推論処理を開始したい。
+これにより、検査詳細画面から推論実行リクエストを処理できる。
 
 #### 受け入れ基準
 
-1. When 診察UUIDを受け取る, ecg-mi-inferencer shall 診察データをデータベースから取得する
-2. If 診察データが存在しない場合, then ecg-mi-inferencer shall エラーを返す
-3. ecg-mi-inferencer shall 診察レコードの推論ステータスを「実行中」に更新する
-4. ecg-mi-inferencer shall 診察データからMFERファイルパスを取得する
+1. When 検査UUIDを受け取る, ecg-mi-inferencer shall 検査データをデータベースから取得する
+2. If 検査データが存在しない場合, then ecg-mi-inferencer shall エラーを返す
+3. ecg-mi-inferencer shall 検査レコードの推論ステータスを「実行中」に更新する
+4. ecg-mi-inferencer shall 検査データからMFERファイルパスを取得する
 5. ecg-mi-inferencer shall FastAPIエンドポイント（POST /api/inferences）として実装する
 6. ecg-mi-inferencer shall 推論実行を非同期で処理する（バックグラウンドジョブ）
 7. ecg-mi-inferencer shall 推論実行IDを返す（ステータス確認用）
@@ -58,12 +58,12 @@
 #### 受け入れ基準
 
 1. When 心電図波形データが抽出される, ecg-mi-inferencer shall データをCSV形式に変換する
-2. ecg-mi-inferencer shall CSVファイルを診察UUID名で保存する（例: `{exam_uuid}.csv`）
+2. ecg-mi-inferencer shall CSVファイルを検査UUID名で保存する（例: `{exam_uuid}.csv`）
 3. ecg-mi-inferencer shall CSVの列として各リード（I, II, III, aVR, aVL, aVF, V1-V6）を含む
 4. ecg-mi-inferencer shall CSVの行としてサンプリングポイントを時系列で含む
 5. ecg-mi-inferencer shall CSVヘッダーにサンプリングレート情報をコメントとして含む
 6. ecg-mi-inferencer shall CSVファイルの保存先を環境変数 `ECG_CSV_FOLDER` で設定可能とする
-7. ecg-mi-inferencer shall CSVファイルのパスを診察レコードに記録する
+7. ecg-mi-inferencer shall CSVファイルのパスを検査レコードに記録する
 8. If 既にCSVファイルが存在する場合, then ecg-mi-inferencer shall 既存ファイルを上書きする
 
 ### 要件4: Vision Transformer用画像変換
@@ -77,9 +77,9 @@
 2. ecg-mi-inferencer shall 12誘導心電図を1枚の画像にレイアウトする
 3. ecg-mi-inferencer shall 画像サイズを環境変数 `ECG_IMAGE_SIZE` で設定可能とする（デフォルト: 224x224）
 4. ecg-mi-inferencer shall 画像形式をPNGとする
-5. ecg-mi-inferencer shall 画像ファイルを診察UUID名で保存する（例: `{exam_uuid}.png`）
+5. ecg-mi-inferencer shall 画像ファイルを検査UUID名で保存する（例: `{exam_uuid}.png`）
 6. ecg-mi-inferencer shall 画像ファイルの保存先を環境変数 `ECG_IMAGE_FOLDER` で設定可能とする
-7. ecg-mi-inferencer shall 画像ファイルのパスを診察レコードに記録する
+7. ecg-mi-inferencer shall 画像ファイルのパスを検査レコードに記録する
 8. ecg-mi-inferencer shall 画像の前処理（正規化、リサンプリング等）を実行する
 9. If 既に画像ファイルが存在する場合, then ecg-mi-inferencer shall 既存ファイルを上書きする
 
@@ -102,13 +102,13 @@
 ### 要件6: 推論結果のDB登録
 
 **目的:** システムとして、推論結果をデータベースに登録したい。
-これにより、診察詳細画面で推論結果を表示できる。
+これにより、検査詳細画面で推論結果を表示できる。
 
 #### 受け入れ基準
 
 1. When 推論が正常に完了する, ecg-mi-inferencer shall 推論結果をデータベースに登録する
 2. ecg-mi-inferencer shall 以下の情報を登録する：リスクスコア、リスクレベル、推論実行日時、CSVファイルパス、画像ファイルパス
-3. ecg-mi-inferencer shall 診察レコードの推論ステータスを「完了」に更新する
+3. ecg-mi-inferencer shall 検査レコードの推論ステータスを「完了」に更新する
 4. ecg-mi-inferencer shall 推論結果の登録を単一トランザクション内で実行する
 5. If DB登録が失敗した場合, then ecg-mi-inferencer shall トランザクションをロールバックし推論ステータスを「エラー」に更新する
 6. ecg-mi-inferencer shall 推論実行日時を記録する
@@ -116,11 +116,11 @@
 ### 要件7: 推論ステータスの取得
 
 **目的:** システムとして、推論実行のステータスを取得したい。
-これにより、診察詳細画面で推論進行状況を表示できる。
+これにより、検査詳細画面で推論進行状況を表示できる。
 
 #### 受け入れ基準
 
-1. ecg-mi-inferencer shall 推論実行IDまたは診察UUIDでステータスを取得できるエンドポイント（GET /api/inferences/:id）を提供する
+1. ecg-mi-inferencer shall 推論実行IDまたは検査UUIDでステータスを取得できるエンドポイント（GET /api/inferences/:id）を提供する
 2. ecg-mi-inferencer shall 推論ステータス（未実行/実行中/完了/エラー）を返す
 3. When 推論ステータスが「完了」の場合, ecg-mi-inferencer shall 推論結果（リスクスコア、リスクレベル）も返す
 4. When 推論ステータスが「エラー」の場合, ecg-mi-inferencer shall エラーメッセージも返す
@@ -134,7 +134,7 @@
 
 1. ecg-mi-inferencer shall エラー種別を以下に分類する：ファイルエラー、パースエラー、変換エラー、推論エラー、DBエラー
 2. When エラーが発生する, ecg-mi-inferencer shall エラー種別とメッセージをログに出力する
-3. ecg-mi-inferencer shall エラー時に診察レコードの推論ステータスを「エラー」に更新する
+3. ecg-mi-inferencer shall エラー時に検査レコードの推論ステータスを「エラー」に更新する
 4. ecg-mi-inferencer shall エラー詳細（スタックトレース）をDEBUGレベルでログ出力する
 5. ecg-mi-inferencer shall 部分的に生成されたファイル（CSV、画像）をクリーンアップする（オプション）
 
@@ -163,13 +163,13 @@
 
 ### 信頼性
 
-- ecg-mi-inferencer shall 推論処理の冪等性を保証する（同一診察UUIDで複数回実行しても結果が同じ）
+- ecg-mi-inferencer shall 推論処理の冪等性を保証する（同一検査UUIDで複数回実行しても結果が同じ）
 - ecg-mi-inferencer shall 部分的なデータが残らないようトランザクション管理を行う
 - ecg-mi-inferencer shall 推論処理中のシステムクラッシュに対応する（再実行可能）
 
 ### セキュリティ
 
-- ecg-mi-inferencer shall 患者情報を含むログは出力しない（診察UUIDのみ可）
+- ecg-mi-inferencer shall 患者情報を含むログは出力しない（検査UUIDのみ可）
 - ecg-mi-inferencer shall 生成ファイルのアクセス権限を適切に設定する
 
 ---
@@ -215,7 +215,7 @@ flowchart TB
         direction TB
 
         subgraph Load["1. データ読み込み"]
-            L1["診察データ取得"]
+            L1["検査データ取得"]
             L2["MFERファイル読み込み"]
             L3["心電図波形抽出"]
             L1 --> L2 --> L3
@@ -267,8 +267,8 @@ flowchart TB
 
 ```mermaid
 flowchart TD
-    Start([推論実行リクエスト<br/>診察UUID]) --> GetExam{診察データ取得}
-    GetExam -->|存在しない| ErrorExam[エラー: 診察データなし]
+    Start([推論実行リクエスト<br/>検査UUID]) --> GetExam{検査データ取得}
+    GetExam -->|存在しない| ErrorExam[エラー: 検査データなし]
     GetExam -->|存在| GetPath[MFERファイルパス取得]
 
     GetPath --> CheckFile{ファイル存在?}
