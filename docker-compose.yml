@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15
+    container_name: ecg-mi-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ecg_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecg_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ecg_mi_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ecg_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ecg-network
+
+  # Backend API (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: ecg-mi-backend
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ecg_user}:${POSTGRES_PASSWORD:-ecg_password}@db:5432/${POSTGRES_DB:-ecg_mi_db}
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+      - backend_cache:/root/.cache
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - ecg-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend (React + Vite)
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: ecg-mi-frontend
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+      - NODE_ENV=development
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - frontend_cache:/root/.npm
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0
+    networks:
+      - ecg-network
+
+  # MFER File Watcher (Optional)
+  watcher:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: ecg-mi-watcher
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ecg_user}:${POSTGRES_PASSWORD:-ecg_password}@db:5432/${POSTGRES_DB:-ecg_mi_db}
+      - WATCH_FOLDER=${WATCH_FOLDER:-/watch}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend:/app
+      - ${WATCH_FOLDER:-./watch}:/watch:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    command: python -m app.services.mfer_watcher_service
+    networks:
+      - ecg-network
+    profiles:
+      - watcher
+
+volumes:
+  postgres_data:
+  backend_cache:
+  frontend_cache:
+
+networks:
+  ecg-network:
+    driver: bridge
