@@ -23,7 +23,7 @@
 ### 非ゴール
 
 - 検査データのDB登録（file-importerの責務）
-- 心筋梗塞リスク推論実行（ecg-mi-inferencerの責務）
+- 心不全リスク推論実行（ecg-mi-inferencerの責務）
 - 検査詳細の表示（exam-viewerの責務）
 - ページネーション（非提供）
 

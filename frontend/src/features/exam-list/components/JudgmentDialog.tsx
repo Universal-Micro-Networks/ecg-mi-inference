@@ -74,7 +74,7 @@ export function JudgmentDialog({ isOpen, onClose, examId }: JudgmentDialogProps)
               {/* 判定結果メッセージ */}
               <h2 className="mb-4 text-3xl font-bold text-gray-900">{judgmentResult}</h2>
               <p className="text-lg text-gray-600">
-                心筋梗塞のリスクが検出されました。医師による確認をお願いします。
+              心不全のリスクが検出されました。医師による確認をお願いします。
               </p>
             </div>
           </div>

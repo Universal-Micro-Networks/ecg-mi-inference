@@ -22,7 +22,7 @@
 
 - 心電図波形データの読み込み（ecg-mi-inferencerの責務）
 - CSV変換・画像変換（ecg-mi-inferencerの責務）
-- 心筋梗塞リスク推論（ecg-mi-inferencerの責務）
+- 心不全リスク推論（ecg-mi-inferencerの責務）
 - ファイル監視・検出（folder-watcherの責務）
 
 ## アーキテクチャ

@@ -1,10 +1,10 @@
 import type { ExamSearchFilters } from '@/features/exam-list/components';
 import {
-  ExamDetailCard,
-  ExamListFooter,
-  ExamListTable,
-  ExamSearchForm,
-  JudgmentDialog,
+    ExamDetailCard,
+    ExamListFooter,
+    ExamListTable,
+    ExamSearchForm,
+    JudgmentDialog,
 } from '@/features/exam-list/components';
 import type { ExamListItem } from '@/features/exam-list/types';
 import { generateMockExams } from '@/features/exam-list/utils/generateMockData';
@@ -66,7 +66,7 @@ function App() {
   };
 
   const handleJudgment = (examId: string) => {
-    // TODO: 判定処理を実装（心筋梗塞リスク推論の実行）
+    // TODO: 判定処理を実装（心不全リスク推論の実行）
     // eslint-disable-next-line no-console
     console.log('judgment requested for exam:', examId);
     setJudgmentExamId(examId);
