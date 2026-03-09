@@ -1,0 +1,1 @@
+export { DiagnosisViewerPage } from "./DiagnosisViewerPage";

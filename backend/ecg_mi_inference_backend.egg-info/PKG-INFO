@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: ecg-mi-inference-backend
+Version: 0.1.0
+Summary: ECG MI Inference Backend API
+Requires-Python: >=3.12
+Requires-Dist: fastapi>=0.100.0
+Requires-Dist: uvicorn[standard]>=0.25.0
+Requires-Dist: sqlalchemy>=2.0.0
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: matplotlib>=3.9.0
+Requires-Dist: numpy>=1.26.0
+Requires-Dist: Pillow>=11.0.0
+Requires-Dist: python-dateutil>=2.8.0

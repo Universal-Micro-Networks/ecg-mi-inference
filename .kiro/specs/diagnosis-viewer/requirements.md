@@ -17,7 +17,7 @@
 - UC-4-extend: システムはシステムユーザーの診察データ選択時に、心筋梗塞推論を実行する
 - Core Capability 5: 統合結果表示（患者情報・心電図・推論結果を一画面で確認）
 
-**技術選定:** React（MVVMアーキテクチャ）、TanStack Query（サーバー状態管理）、Orval（API型定義）、Chart.js/Recharts（心電図可視化）
+**技術選定:** React（MVVMアーキテクチャ）、TanStack Query（サーバー状態管理）、Orval（API型定義）、バックエンドで生成した心電図波形画像の表示
 
 ## 要件一覧
 
@@ -66,7 +66,7 @@
 #### 受け入れ基準
 
 1. 診察詳細表示機能 shall 心電図波形データをグラフ形式で表示する
-2. 診察詳細表示機能 shall CSVファイルから心電図波形データを読み込んで表示する
+2. 診察詳細表示機能 shall バックエンドAPIでCSVファイルから心電図波形画像を生成し、ブラウザで表示する
 3. 診察詳細表示機能 shall 12誘導心電図を全て表示する（I, II, III, aVR, aVL, aVF, V1-V6）
 4. 診察詳細表示機能 shall 各誘導を縦方向に配置し、時系列データを横軸に表示する
 5. 診察詳細表示機能 shall サンプリングレート情報を表示する
@@ -232,7 +232,7 @@ flowchart TB
     end
 
     subgraph Storage["ストレージ"]
-        DB[(PostgreSQL)]
+        DB[(SQLite)]
         FS["ファイルシステム<br/>(CSV/画像)"]
     end
 

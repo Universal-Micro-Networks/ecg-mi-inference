@@ -1,0 +1,44 @@
+[project]
+name = "ecg-mi-inference-backend"
+version = "0.1.0"
+description = "ECG MI Inference Backend API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.25.0",
+    "sqlalchemy>=2.0.0",
+    "pandas>=2.0.0",
+    "matplotlib>=3.9.0",
+    "numpy>=1.26.0",
+    "Pillow>=11.0.0",
+    "python-dateutil>=2.8.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.20",
+    "pyright>=1.1.408",
+    "ruff>=0.6.9",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = [".venv", "data", "**/__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+include = ["app"]
+exclude = ["data", ".venv"]
+reportMissingTypeStubs = false

@@ -1,0 +1,64 @@
+services:
+  # Frontend service (Vite React development server)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: ecg-mi-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+      - VITE_PROXY_TARGET=http://backend:8000
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - ecg-mi-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5173",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Backend service (FastAPI/Uvicorn)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: ecg-mi-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////app/data/ecg_mi.db
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/data:/app/data
+    networks:
+      - ecg-mi-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  ecg-mi-network:
+    driver: bridge
+
+volumes:
+  backend_data:
+    driver: local

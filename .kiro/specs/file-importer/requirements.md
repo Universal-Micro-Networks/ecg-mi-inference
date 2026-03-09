@@ -246,7 +246,7 @@ flowchart TB
     end
 
     subgraph Storage["ストレージ"]
-        DB[(PostgreSQL)]
+        DB[(SQLite)]
         FS["ファイルシステム<br/>(MFERファイル)"]
     end
 

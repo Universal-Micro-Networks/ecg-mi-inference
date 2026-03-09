@@ -59,7 +59,7 @@ graph TB
     end
 
     subgraph Storage["Storage"]
-        PostgreSQL[(PostgreSQL)]
+        SQLite[(SQLite)]
     end
 
     LoginPage --> useAuth
@@ -70,7 +70,7 @@ graph TB
     AuthService --> AuthDomain
     AuthService --> TokenService
     AuthService --> PasswordRepo
-    PasswordRepo --> PostgreSQL
+    PasswordRepo --> SQLite
 ```
 
 ### 技術スタック
@@ -82,7 +82,7 @@ graph TB
 | Backend | FastAPI + Python 3.14+ | REST API | Layered構成 |
 | 認可 | python-jose (JWT) | トークン生成・検証 | |
 | パスワード | bcrypt (passlib) | ハッシュ化 | |
-| Database | PostgreSQL | パスワード保存 | |
+| Database | SQLite | パスワード保存 | |
 
 ## システムフロー
 
@@ -98,7 +98,7 @@ sequenceDiagram
     participant Service as AuthService
     participant PwdRepo as PasswordRepository
     participant Token as TokenService
-    participant DB as PostgreSQL
+    participant DB as SQLite
 
     User->>LoginPage: パスワード入力
     LoginPage->>useAuth: handleLogin(password)
@@ -175,7 +175,7 @@ sequenceDiagram
 | AuthRouter | Backend/Presentation | APIエンドポイント | 1, 2, 4 | AuthService |
 | AuthService | Backend/Application | 認可ユースケース | 1, 2, 4 | TokenService, PasswordRepository |
 | TokenService | Backend/Infrastructure | JWT生成・検証 | 2 | - |
-| PasswordRepository | Backend/Infrastructure | パスワード永続化 | 1, 5 | PostgreSQL |
+| PasswordRepository | Backend/Infrastructure | パスワード永続化 | 1, 5 | SQLite |
 | AuthMiddleware | Backend/Presentation | リクエスト認可検証 | 3 | TokenService |
 
 ---

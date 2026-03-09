@@ -66,6 +66,7 @@
 4. 診察一覧機能 shall 年齢カラムをクリックでソート可能とする（昇順/降順）
 5. 診察一覧機能 shall 現在のソートカラムと方向を視覚的に表示する（▲/▼アイコン）
 6. 診察一覧機能 shall ソート条件をクエリパラメータで保持する（ページリロード時も維持）
+7. 診察一覧機能 shall ソート条件のクエリパラメータ名を `sort_by` と `sort_order` に統一する
 
 ### 要件4: 診察選択
 
@@ -177,7 +178,7 @@ flowchart TB
     end
 
     subgraph DB["Database"]
-        PG[(PostgreSQL)]
+        PG[(SQLite)]
     end
 
     API --> EP

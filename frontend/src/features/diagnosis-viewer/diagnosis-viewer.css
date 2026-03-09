@@ -1,0 +1,155 @@
+.viewer-page {
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 32px 24px 64px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.viewer-header {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+
+.viewer-header h1 {
+	margin: 0;
+	font-size: 28px;
+}
+
+.back-link {
+	text-decoration: none;
+	color: #1a1a1a;
+	font-weight: 600;
+}
+
+.card {
+	background: #fff;
+	border-radius: 12px;
+	padding: 16px 20px;
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+}
+
+.card h2 {
+	margin: 0 0 12px;
+	font-size: 18px;
+}
+
+.card-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 12px;
+	font-size: 14px;
+}
+
+.label {
+	display: block;
+	font-size: 12px;
+	color: #777;
+}
+
+.card-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+}
+
+.card-header button {
+	padding: 8px 14px;
+	border-radius: 8px;
+	border: none;
+	background: #1a1a1a;
+	color: #fff;
+}
+
+.status-row {
+	margin-top: 8px;
+	display: flex;
+	justify-content: space-between;
+	font-size: 14px;
+}
+
+.result-grid {
+	margin-top: 12px;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 12px;
+}
+
+.badge {
+	padding: 4px 8px;
+	border-radius: 999px;
+	background: #eee;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.badge.low {
+	background: #e6f5eb;
+	color: #1f7a3f;
+}
+
+.badge.medium {
+	background: #fff3d6;
+	color: #8a5a00;
+}
+
+.badge.high {
+	background: #ffe2e2;
+	color: #a40000;
+}
+
+.progress {
+	margin-top: 12px;
+	font-size: 13px;
+	color: #666;
+}
+
+.ecg-image {
+	width: 100%;
+	border-radius: 8px;
+	margin-top: 12px;
+}
+
+.dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.4);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.dialog {
+	background: #fff;
+	border-radius: 12px;
+	padding: 20px;
+	width: min(420px, 90vw);
+}
+
+.dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.dialog-actions button {
+	padding: 8px 14px;
+	border-radius: 8px;
+	border: none;
+}
+
+.dialog-actions button.secondary {
+	background: #ececec;
+}
+
+@media (max-width: 720px) {
+	.viewer-header {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}

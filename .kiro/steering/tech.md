@@ -9,7 +9,7 @@
 flowchart LR
   FE[(Frontend React/MVVM)]
   BE[(Backend FastAPI/Layered)]
-  DB[(PostgreSQL)]
+  DB[(SQLite)]
   MFER[MFER+nWatcher]
 
   FE <--> |REST API| BE
@@ -61,7 +61,7 @@ flowchart TB
 |-------|------------|---------|
 | **Frontend** | React + TypeScript | React 18+ |
 | **Backend** | FastAPI (Python) | Python 3.14+ |
-| **Database** | PostgreSQL | 15+ |
+| **Database** | SQLite | 15+ |
 | **AI/ML** | PyTorch + Vision Transformer | - |
 
 ## Key Libraries
@@ -92,17 +92,17 @@ flowchart TB
 
 ### Database
 - **プライマリーキー**: 全テーブルでUUID（データベース側で生成）を使用
-- PostgreSQL の `UUID` 型を使用（文字列保存ではない）
+- SQLite の `UUID` 型を使用（文字列保存ではない）
 - SQLAlchemy での実装例:
   ```python
   from sqlalchemy import Column, text
-  from sqlalchemy.dialects.postgresql import UUID
+  from sqlalchemy.dialects.SQLite import UUID
 
   class BaseModel:
       id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
   ```
 
-  **注意:** `gen_random_uuid()`はPostgreSQL 13以降で標準機能として利用可能。データベース側でUUIDを生成することで、アプリケーション側とデータベース側で一貫性を保つ。
+  **注意:** `gen_random_uuid()`はSQLite 13以降で標準機能として利用可能。データベース側でUUIDを生成することで、アプリケーション側とデータベース側で一貫性を保つ。
 
 ### Code Quality
 
@@ -298,7 +298,7 @@ jobs:
 services:
   frontend:    # React dev server (hot reload)
   backend:     # FastAPI (uvicorn --reload)
-  db:          # PostgreSQL
+  db:          # SQLite
   watcher:     # MFER file watcher (optional)
 ```
 
@@ -306,7 +306,7 @@ services:
 商用運用では対象PCに直接インストールして実行。
 - Frontend: ビルド済み静的ファイルを配信（nginx or backend から serve）
 - Backend: システムサービスとして起動
-- Database: ローカル PostgreSQL インスタンス
+- Database: ローカル SQLite インスタンス
 
 ```bash
 # 本番デプロイイメージ
@@ -327,7 +327,7 @@ services:
 | Docker Compose | v2+ | マルチコンテナ管理 |
 | Node.js | 20+ | フロントエンドビルド（本番デプロイ時） |
 | Python | 3.14+ | バックエンド実行（本番デプロイ時） |
-| PostgreSQL | 15+ | データベース（本番デプロイ時） |
+| SQLite | 15+ | データベース（本番デプロイ時） |
 | pre-commit | 3.0+ | Git hooks管理（コミット前の品質チェック） |
 
 ### Common Commands
@@ -372,7 +372,7 @@ pre-commit run --all-files    # 全ファイルに対して実行
 | **技術スタック** | |
 | React（Next.js なし） | SSR不要、シンプルなSPA構成で十分 |
 | FastAPI | 型安全、自動APIドキュメント生成、非同期対応 |
-| PostgreSQL | 医療データの信頼性、JSON対応、拡張性 |
+| SQLite | 医療データの信頼性、JSON対応、拡張性 |
 | UUID（プライマリーキー） | 分散環境での一意性保証、連番によるデータ推測防止、セキュリティ向上 |
 | **開発環境** | |
 | Docker Compose（開発のみ） | 環境統一、セットアップ簡略化 |
