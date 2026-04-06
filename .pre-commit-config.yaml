@@ -14,20 +14,20 @@ repos:
         files: ^frontend/.*\.(ts|tsx|js|jsx|json|jsonc)$
         pass_filenames: false
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
-    hooks:
-      - id: ruff
-        name: ruff (Python lint)
-        args: [--config, backend/pyproject.toml]
-        files: ^backend/.*\.py$
-      - id: ruff-format
-        name: ruff (Python format)
-        args: [--config, backend/pyproject.toml]
-        files: ^backend/.*\.py$
-
   - repo: local
     hooks:
+      - id: ruff-check-backend
+        name: ruff (Python lint)
+        entry: bash -c 'cd backend && uv run ruff check app/ tests/ --config pyproject.toml'
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: false
+      - id: ruff-format-backend
+        name: ruff (Python format)
+        entry: bash -c 'cd backend && uv run ruff format app/ tests/ --config pyproject.toml'
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: false
       - id: pyright
         name: pyright (Python type check)
         entry: bash -c 'cd backend && uv run pyright --project pyproject.toml'

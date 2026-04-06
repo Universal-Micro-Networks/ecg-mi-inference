@@ -136,8 +136,9 @@ backend/
 
 ### Examinations
 
-- `GET /api/examinations` - List examinations for a date with sorting
-  - Query params: `exam_date` (required), `sort_by`, `sort_order`
+- `GET /api/examinations` - List examinations with server-side filters and pagination
+  - Query params: `exam_date` (required), `sort_by`, `sort_order`, `patient_id`, `patient_name`, `limit`, `offset`
+  - Response: `{ "items": [...], "total": <number> }`
 
 - `GET /api/examinations/{examination_id}` - Get examination detail
 
@@ -152,6 +153,28 @@ backend/
 
 - `GET /api/inferences/{inference_id}` - Get inference status/results
   - Polls inference status, returns results when complete
+
+## File Importer (folder-watcher 連携)
+
+`folder-watcher` は `app.file_importer.import_mfer_file(file_path)` を呼び出します。
+
+- **入力**: `file_path` (絶対パス推奨、`.mwf/.MWF` を大文字小文字無視で受理)
+- **戻り値**: `None`（成功時）
+- **例外**: `FileImporterError` または下位例外（失敗時）
+
+処理内容（概要）:
+- `mfer_tools.extract_mfer_header()` で MFER ヘッダー抽出
+- 同名 XML (`.XML/.xml`) から不足項目を補完
+- `patients` / `examinations` / `inferences` へ登録
+- 成功時: `MFER_PROCESSED_FOLDER`、失敗時: `MFER_ERROR_FOLDER` へ移動
+
+### file-importer 関連環境変数
+
+| 変数名 | 必須 | デフォルト | 説明 |
+|---|---|---|---|
+| `MFER_PROCESSED_FOLDER` | - | `./processed` | 正常処理ファイルの移動先 |
+| `MFER_ERROR_FOLDER` | - | `./error` | エラーファイルの移動先 |
+| `MFER_WATCH_FOLDER` | folder-watcher側で必須 | - | 監視対象フォルダ |
 
 ## Database
 

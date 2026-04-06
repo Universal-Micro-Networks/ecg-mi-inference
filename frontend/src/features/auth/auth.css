@@ -1,0 +1,58 @@
+.auth-login-page {
+	max-width: 420px;
+	margin: 64px auto;
+	padding: 16px;
+}
+
+.auth-login-title {
+	font-size: 20px;
+	font-weight: 700;
+	margin-bottom: 16px;
+}
+
+.auth-login-label {
+	display: block;
+	margin-bottom: 8px;
+}
+
+.auth-login-input-row {
+	display: flex;
+	gap: 8px;
+}
+
+.auth-login-input {
+	flex: 1;
+	padding: 8px;
+}
+
+.auth-login-toggle {
+	padding: 8px 12px;
+}
+
+.auth-login-error {
+	color: crimson;
+	margin-top: 12px;
+}
+
+.auth-login-submit {
+	margin-top: 16px;
+	padding: 10px 12px;
+	width: 100%;
+}
+
+.auth-password-strength {
+	margin-top: 10px;
+	font-size: 12px;
+}
+
+.auth-password-strength-weak {
+	color: #c62828;
+}
+
+.auth-password-strength-medium {
+	color: #c78100;
+}
+
+.auth-password-strength-strong {
+	color: #0a7f36;
+}

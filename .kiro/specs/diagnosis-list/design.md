@@ -6,13 +6,13 @@
 ## 画面/ルーティング
 - 画面: 診察一覧
 - ルート: `/diagnoses`
-- クエリ: `exam_date` (YYYY-MM-DD, 必須), `sort_by`, `sort_order`
+- クエリ: `exam_date` (YYYY-MM-DD, 必須), `sort_by`, `sort_order`, `limit`, `offset`
   - 初回アクセス時に `exam_date` が未指定なら当日を自動設定する
 
 ## API設計
 - `GET /api/examinations`
-  - Query: `exam_date` (必須), `sort_by` (default: `exam_date`), `sort_order` (default: `desc`)
-  - Response: 診察一覧 (患者情報を含む)
+  - Query: `exam_date` (必須), `sort_by` (default: `exam_date`), `sort_order` (default: `desc`), `patient_id` (任意, 部分一致), `patient_name` (任意, 部分一致), `limit` (default: 50), `offset` (default: 0)
+  - Response: `{ items: 診察一覧, total: 総件数 }`
   - 認可: JWTをヘッダーに付与
 
 ## フロントエンド設計
@@ -28,10 +28,10 @@
 
 ### ViewModel (Hooks)
 - `useDiagnosisList`
-  - `exam_date`, `sort_by`, `sort_order` を引数に一覧取得
+  - `exam_date`, `sort_by`, `sort_order`, `patient_id`, `patient_name`, `limit`, `offset` を引数に一覧取得
   - TanStack Queryでキャッシュ/再取得
 - `useDiagnosisFilters`
-  - 患者ID/氏名フィルター (クライアント側)
+  - 患者ID/氏名フィルター (サーバー検索条件として保持)
   - 500msデバウンス
 - `useSortQueryParams`
   - URLクエリとソート状態を同期
@@ -41,7 +41,7 @@
 ### 状態管理
 - サーバー状態: TanStack Query
 - UI状態: React local state
-- フィルター: 患者ID/氏名はフロントエンドのみ
+- フィルター: 患者ID/氏名はデバウンス後にAPIクエリへ反映
 
 ### リフレッシュ
 - 手動リフレッシュボタン
@@ -49,7 +49,7 @@
 
 ## 表示仕様
 - 初期ソート: 検査日時 降順
-- 総件数は非表示
+- 総件数とページ範囲を表示
 - フィルター結果0件: メッセージ表示
 - ローディング/エラー表示
 
@@ -71,3 +71,7 @@
 ## 非機能
 - 取得から表示まで2秒以内
 - 当日分のみをサーバー側で取得
+
+---
+
+**最終更新:** 2026-04-07

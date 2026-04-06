@@ -137,3 +137,17 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Backend runtime (SQLite / importer output / ECG cache — generated locally)
+backend/data/*.db
+backend/data/ecg_cache/
+backend/processed/
+
+# Local MFER/XML samples (not versioned)
+develop/sample_data/

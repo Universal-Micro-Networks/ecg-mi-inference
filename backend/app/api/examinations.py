@@ -5,7 +5,7 @@ Handles examination list, detail, and ECG image retrieval.
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
@@ -21,15 +21,22 @@ def list_examinations(
     exam_date: date,
     sort_by: str = "exam_date",
     sort_order: str = "desc",
+    patient_id: str | None = Query(None, description="患者ID（部分一致）"),
+    patient_name: str | None = Query(None, description="氏名（部分一致）"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
     """
-    List examinations for a specific date with optional sorting.
+    List examinations for a specific date with optional sorting, filters, and pagination.
 
     Query Parameters:
     - exam_date: Filter by examination date (YYYY-MM-DD format)
     - sort_by: Sort field (exam_date, patient_id, patient_name, age)
     - sort_order: Sort direction (asc, desc)
+    - patient_id: Optional substring filter on patient external ID
+    - patient_name: Optional substring filter on patient name
+    - limit / offset: Page size and skip count
     """
     # Parse exam_date to datetime range (day boundaries)
     exam_date_start = datetime.combine(exam_date, datetime.min.time())
@@ -43,6 +50,13 @@ def list_examinations(
         )
         .join(Patient)
     )
+
+    if patient_id and patient_id.strip():
+        query = query.filter(Patient.patient_id.contains(patient_id.strip(), autoescape=True))
+    if patient_name and patient_name.strip():
+        query = query.filter(Patient.name.contains(patient_name.strip(), autoescape=True))
+
+    total = query.count()
 
     # Sort
     if sort_by == "patient_id":
@@ -58,7 +72,7 @@ def list_examinations(
             Examination.exam_date.desc() if sort_order == "desc" else Examination.exam_date.asc()
         )
 
-    examinations = query.all()
+    examinations = query.limit(limit).offset(offset).all()
 
     # Format response
     result = []
@@ -73,7 +87,7 @@ def list_examinations(
             }
         )
 
-    return result
+    return {"items": result, "total": total}
 
 
 @router.get("/examinations/{examination_id}")

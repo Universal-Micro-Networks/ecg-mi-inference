@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { DiagnosisTable } from "./components/DiagnosisTable";
 import { EmptyState } from "./components/EmptyState";
 import { ErrorState } from "./components/ErrorState";
 import { FilterPanel } from "./components/FilterPanel";
 import "./diagnosis-list.css";
+import { apiFetch } from "../../lib/auth";
 import { useDiagnosisFilters } from "./hooks/useDiagnosisFilters";
 import { useDiagnosisList } from "./hooks/useDiagnosisList";
 import { useRowSelection } from "./hooks/useRowSelection";
@@ -23,49 +24,73 @@ const formatUpdatedAt = (timestamp?: number) => {
 	).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 };
 
-type HeadersRecord = Record<string, string>;
-
-const getAuthHeader = (): HeadersRecord => {
-	const token = localStorage.getItem("auth_token");
-	const headers: HeadersRecord = {
-		"Content-Type": "application/json",
-	};
-	if (token) {
-		headers.Authorization = `Bearer ${token}`;
-	}
-	return headers;
-};
-
 export const DiagnosisListPage = () => {
-	const { examDate, sortBy, sortOrder, setExamDate, setSort } =
-		useSortQueryParams();
 	const {
-		data = [],
+		examDate,
+		sortBy,
+		sortOrder,
+		limit,
+		offset,
+		setExamDate,
+		setSort,
+		setOffset,
+	} = useSortQueryParams();
+
+	const handleFilterDebounced = useCallback(() => {
+		setOffset(0);
+	}, [setOffset]);
+
+	const {
+		patientId,
+		patientName,
+		debouncedPatientId,
+		debouncedPatientName,
+		setPatientId,
+		setPatientName,
+		resetFilters,
+	} = useDiagnosisFilters(handleFilterDebounced);
+
+	const {
+		data,
 		isLoading,
 		isError,
 		error,
 		refetch,
 		isFetching,
 		dataUpdatedAt,
-	} = useDiagnosisList({ examDate, sortBy, sortOrder });
+	} = useDiagnosisList({
+		examDate,
+		sortBy,
+		sortOrder,
+		patientId: debouncedPatientId,
+		patientName: debouncedPatientName,
+		limit,
+		offset,
+	});
 	const { selectedId, selectRow } = useRowSelection();
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [submitError, setSubmitError] = useState<string | null>(null);
-	const {
-		patientId,
-		patientName,
-		setPatientId,
-		setPatientName,
-		resetFilters,
-		filtered,
-	} = useDiagnosisFilters(data);
 
-	const visibleRows = useMemo(() => filtered, [filtered]);
+	const items = data?.items ?? [];
+	const total = data?.total ?? 0;
+
+	const rangeLabel = useMemo(() => {
+		if (total === 0) {
+			return "0 件";
+		}
+		const from = offset + 1;
+		const to = Math.min(offset + items.length, total);
+		return `${from}〜${to} 件 / 全 ${total} 件`;
+	}, [items.length, offset, total]);
 
 	const handleClear = () => {
 		resetFilters();
 		setExamDate(new Date().toISOString().slice(0, 10));
+		setOffset(0);
 	};
+
+	const canPrev = offset > 0;
+	const canNext = offset + items.length < total;
 
 	if (isLoading) {
 		return <div className="state loading">読み込み中...</div>;
@@ -82,9 +107,8 @@ export const DiagnosisListPage = () => {
 		try {
 			setIsSubmitting(true);
 			setSubmitError(null);
-			const response = await fetch("/api/inferences", {
+			const response = await apiFetch("/api/inferences", {
 				method: "POST",
-				headers: getAuthHeader(),
 				body: JSON.stringify({ examination_id: selectedId }),
 			});
 			if (!response.ok) {
@@ -113,11 +137,32 @@ export const DiagnosisListPage = () => {
 				onRefresh={refetch}
 				isRefreshing={isFetching}
 			/>
-			{visibleRows.length === 0 ? (
+			<div className="pagination-bar">
+				<span className="pagination-range">{rangeLabel}</span>
+				<div className="pagination-controls">
+					<button
+						type="button"
+						className="secondary"
+						disabled={!canPrev || isFetching}
+						onClick={() => setOffset(Math.max(0, offset - limit))}
+					>
+						前へ
+					</button>
+					<button
+						type="button"
+						className="secondary"
+						disabled={!canNext || isFetching}
+						onClick={() => setOffset(offset + limit)}
+					>
+						次へ
+					</button>
+				</div>
+			</div>
+			{items.length === 0 ? (
 				<EmptyState message="該当する診察データがありません" />
 			) : (
 				<DiagnosisTable
-					data={visibleRows}
+					data={items}
 					selectedId={selectedId}
 					sortBy={sortBy}
 					sortOrder={sortOrder}

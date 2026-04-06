@@ -16,7 +16,10 @@ RUN pip install --no-cache-dir \
     pandas \
     matplotlib \
     pillow \
-    python-dateutil
+    python-dateutil \
+    python-jose \
+    passlib[bcrypt] \
+    watchdog
 
 # Copy application code
 COPY backend/app ./app

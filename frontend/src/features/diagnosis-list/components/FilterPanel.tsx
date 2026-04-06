@@ -36,7 +36,7 @@ export const FilterPanel = ({
 				type="text"
 				value={patientId}
 				onChange={(event) => onPatientIdChange(event.target.value)}
-				placeholder="患者IDを入力"
+				placeholder="例: P-001"
 			/>
 		</label>
 		<label className="field">
@@ -45,7 +45,7 @@ export const FilterPanel = ({
 				type="text"
 				value={patientName}
 				onChange={(event) => onPatientNameChange(event.target.value)}
-				placeholder="氏名を入力"
+				placeholder="例: 山田太郎"
 			/>
 		</label>
 		<div className="filter-actions">

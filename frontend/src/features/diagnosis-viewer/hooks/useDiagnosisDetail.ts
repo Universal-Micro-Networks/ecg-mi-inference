@@ -1,23 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ExaminationDetailResponse } from "../types";
 
-type HeadersRecord = Record<string, string>;
-
-const getAuthHeader = (): HeadersRecord => {
-	const token = localStorage.getItem("auth_token");
-	const headers: HeadersRecord = {
-		"Content-Type": "application/json",
-	};
-	if (token) {
-		headers.Authorization = `Bearer ${token}`;
-	}
-	return headers;
-};
+import { apiFetch } from "../../../lib/auth";
 
 const fetchExaminationDetail = async (id: string) => {
-	const response = await fetch(`/api/examinations/${id}`, {
-		headers: getAuthHeader(),
-	});
+	const response = await apiFetch(`/api/examinations/${id}`);
 
 	if (response.status === 404) {
 		return null;

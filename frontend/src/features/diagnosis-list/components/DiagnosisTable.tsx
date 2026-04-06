@@ -37,12 +37,6 @@ export const DiagnosisTable = ({
 					</button>
 				</th>
 				<th>
-					<button type="button" onClick={() => onSort("patient_id")}>
-						患者ID
-						<SortIndicator active={sortBy === "patient_id"} order={sortOrder} />
-					</button>
-				</th>
-				<th>
 					<button type="button" onClick={() => onSort("patient_name")}>
 						氏名
 						<SortIndicator
@@ -52,13 +46,19 @@ export const DiagnosisTable = ({
 					</button>
 				</th>
 				<th>
-					<span>性別</span>
+					<button type="button" onClick={() => onSort("patient_id")}>
+						患者ID
+						<SortIndicator active={sortBy === "patient_id"} order={sortOrder} />
+					</button>
 				</th>
 				<th>
 					<button type="button" onClick={() => onSort("age")}>
 						年齢
 						<SortIndicator active={sortBy === "age"} order={sortOrder} />
 					</button>
+				</th>
+				<th>
+					<span>性別</span>
 				</th>
 			</tr>
 		</thead>
@@ -83,15 +83,6 @@ export const DiagnosisTable = ({
 							className="row-button"
 							onClick={() => onSelect(item.id)}
 						>
-							{item.patient.external_id}
-						</button>
-					</td>
-					<td>
-						<button
-							type="button"
-							className="row-button"
-							onClick={() => onSelect(item.id)}
-						>
 							{item.patient.name}
 						</button>
 					</td>
@@ -101,7 +92,7 @@ export const DiagnosisTable = ({
 							className="row-button"
 							onClick={() => onSelect(item.id)}
 						>
-							{item.patient.gender}
+							{item.patient.external_id}
 						</button>
 					</td>
 					<td>
@@ -111,6 +102,15 @@ export const DiagnosisTable = ({
 							onClick={() => onSelect(item.id)}
 						>
 							{item.patient.age}
+						</button>
+					</td>
+					<td>
+						<button
+							type="button"
+							className="row-button"
+							onClick={() => onSelect(item.id)}
+						>
+							{item.patient.gender}
 						</button>
 					</td>
 				</tr>

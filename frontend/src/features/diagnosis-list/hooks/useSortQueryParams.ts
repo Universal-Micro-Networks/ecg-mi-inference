@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 const formatDate = (date: Date) => {
@@ -7,6 +7,12 @@ const formatDate = (date: Date) => {
 	const day = String(date.getDate()).padStart(2, "0");
 	return `${year}-${month}-${day}`;
 };
+
+const clampLimit = (n: number) =>
+	Number.isFinite(n) ? Math.min(500, Math.max(1, Math.floor(n))) : 50;
+
+const clampOffset = (n: number) =>
+	Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
 
 export const useSortQueryParams = () => {
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -17,6 +23,16 @@ export const useSortQueryParams = () => {
 
 	const sortBy = searchParams.get("sort_by") ?? "exam_date";
 	const sortOrder = searchParams.get("sort_order") ?? "desc";
+
+	const limit = useMemo(() => {
+		const raw = Number.parseInt(searchParams.get("limit") ?? "50", 10);
+		return clampLimit(raw);
+	}, [searchParams]);
+
+	const offset = useMemo(() => {
+		const raw = Number.parseInt(searchParams.get("offset") ?? "0", 10);
+		return clampOffset(raw);
+	}, [searchParams]);
 
 	useEffect(() => {
 		if (!examDate) {
@@ -29,6 +45,7 @@ export const useSortQueryParams = () => {
 	const setExamDate = (value: string) => {
 		const next = new URLSearchParams(searchParams);
 		next.set("exam_date", value);
+		next.set("offset", "0");
 		setSearchParams(next);
 	};
 
@@ -44,14 +61,38 @@ export const useSortQueryParams = () => {
 
 		next.set("sort_by", nextSortBy);
 		next.set("sort_order", order);
+		next.set("offset", "0");
 		setSearchParams(next);
 	};
+
+	const setOffset = useCallback(
+		(value: number) => {
+			const next = new URLSearchParams(searchParams);
+			next.set("offset", String(clampOffset(value)));
+			setSearchParams(next);
+		},
+		[searchParams, setSearchParams],
+	);
+
+	const setLimit = useCallback(
+		(value: number) => {
+			const next = new URLSearchParams(searchParams);
+			next.set("limit", String(clampLimit(value)));
+			next.set("offset", "0");
+			setSearchParams(next);
+		},
+		[searchParams, setSearchParams],
+	);
 
 	return {
 		examDate: examDate || formatDate(new Date()),
 		sortBy,
 		sortOrder,
+		limit,
+		offset,
 		setExamDate,
 		setSort,
+		setOffset,
+		setLimit,
 	};
 };

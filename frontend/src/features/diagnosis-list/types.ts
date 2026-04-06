@@ -9,8 +9,11 @@ export type PatientSummary = {
 export type ExaminationSummary = {
 	id: string;
 	exam_date: string;
-	created_at: string;
+	created_at?: string;
 	patient: PatientSummary;
 };
 
-export type ExaminationsResponse = ExaminationSummary[];
+export type ExaminationsListResponse = {
+	items: ExaminationSummary[];
+	total: number;
+};

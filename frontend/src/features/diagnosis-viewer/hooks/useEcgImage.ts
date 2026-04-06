@@ -1,15 +1,6 @@
 import { useEffect, useState } from "react";
 
-type HeadersRecord = Record<string, string>;
-
-const getAuthHeader = (): HeadersRecord => {
-	const token = localStorage.getItem("auth_token");
-	const headers: HeadersRecord = {};
-	if (token) {
-		headers.Authorization = `Bearer ${token}`;
-	}
-	return headers;
-};
+import { apiFetch } from "../../../lib/auth";
 
 export const useEcgImage = (examinationId: string) => {
 	const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -28,10 +19,9 @@ export const useEcgImage = (examinationId: string) => {
 			try {
 				setIsLoading(true);
 				setError(null);
-				const response = await fetch(
+				const response = await apiFetch(
 					`/api/examinations/${examinationId}/ecg-image`,
 					{
-						headers: getAuthHeader(),
 						signal: controller.signal,
 					},
 				);

@@ -9,12 +9,12 @@ export const PatientInfoCard = ({ patient }: Props) => (
 		<h2>患者情報</h2>
 		<div className="card-grid">
 			<div>
-				<span className="label">患者ID</span>
-				<span>{patient.external_id}</span>
-			</div>
-			<div>
 				<span className="label">氏名</span>
 				<span>{patient.name}</span>
+			</div>
+			<div>
+				<span className="label">患者ID</span>
+				<span>{patient.external_id}</span>
 			</div>
 			<div>
 				<span className="label">性別</span>

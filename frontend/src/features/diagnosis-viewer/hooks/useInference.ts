@@ -2,23 +2,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { InferenceDetail, InferenceStatusResponse } from "../types";
 
-type HeadersRecord = Record<string, string>;
-
-const getAuthHeader = (): HeadersRecord => {
-	const token = localStorage.getItem("auth_token");
-	const headers: HeadersRecord = {
-		"Content-Type": "application/json",
-	};
-	if (token) {
-		headers.Authorization = `Bearer ${token}`;
-	}
-	return headers;
-};
+import { apiFetch } from "../../../lib/auth";
 
 const fetchInferenceStatus = async (examinationId: string) => {
-	const response = await fetch(`/api/inferences/${examinationId}`, {
-		headers: getAuthHeader(),
-	});
+	const response = await apiFetch(`/api/inferences/${examinationId}`);
 
 	if (!response.ok) {
 		throw new Error("推論ステータスの取得に失敗しました");
@@ -28,9 +15,8 @@ const fetchInferenceStatus = async (examinationId: string) => {
 };
 
 const runInferenceRequest = async (examinationId: string) => {
-	const response = await fetch("/api/inferences", {
+	const response = await apiFetch("/api/inferences", {
 		method: "POST",
-		headers: getAuthHeader(),
 		body: JSON.stringify({ examination_id: examinationId }),
 	});
 

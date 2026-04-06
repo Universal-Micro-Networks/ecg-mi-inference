@@ -153,7 +153,7 @@ make db-reset
 
 #### 検査 (Examinations)
 
-- `GET /api/examinations` - 検査一覧取得
+- `GET /api/examinations` - 検査一覧取得（`exam_date` 必須。任意: `patient_id` / `patient_name`（部分一致）、`limit` / `offset`。応答 `{ items, total }`）
 - `GET /api/examinations/{id}` - 検査詳細取得
 - `GET /api/examinations/{id}/ecg-image` - ECG画像取得 (PNG)
 

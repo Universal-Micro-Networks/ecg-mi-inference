@@ -135,6 +135,11 @@ docker-compose down
 
 **Environment Variables**:
 - `DATABASE_URL` - SQLite database path (default: `sqlite:////app/data/ecg_mi.db`)
+- `MFER_WATCH_FOLDER` - folder-watcher の監視対象フォルダ
+- `MFER_PROCESSED_FOLDER` - file-importer 成功時の移動先（default: `./processed`）
+- `MFER_ERROR_FOLDER` - file-importer 失敗時の移動先（default: `./error`）
+- `JWT_SECRET_KEY` - 認可トークン署名用シークレット（必須）
+- `INITIAL_ADMIN_PASSWORD` - 初回起動時の認可パスワード
 
 **Volume Mounts**:
 - `./backend/app` - Python application code

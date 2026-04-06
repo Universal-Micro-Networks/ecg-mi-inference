@@ -25,6 +25,62 @@
 - 多要素認証（MFA）
 - OAuth/OIDC連携
 
+## 意思決定（この設計で採用する方針）
+
+本ドキュメント内で揺れやすい点を、実装に入れる前提として固定する。
+
+### トークン保存方式（初期実装）
+
+- **採用**: Frontend は **`localStorage`** に `access_token` / `refresh_token` を保存する
+- **理由**: 医療機関内の専用端末・単一ユーザーモデルを前提に、初期実装を簡潔にする
+- **注意（セキュリティ）**:
+  - `localStorage` は XSS に弱い。初期実装の前提として **CSP 等の XSS 低減策**を運用で必須とする
+  - **将来拡張**として HttpOnly Cookie 方式を別仕様・別タスクで検討する（本仕様の非ゴール）
+
+### CSRF の扱い（初期実装）
+
+- **採用**: 初期実装（`localStorage` + `Authorization: Bearer`）では **CSRF 対策は必須要件から外す**
+- **代替**: Cookie 採用時に SameSite / CSRF トークンを設計に含める
+
+### JWT ペイロードとブラックリスト
+
+- **採用**: アクセストークンに **`jti`** を含め、ログアウト時に `token_blacklist` に **`jti` を保存**して失効扱いにする
+- **採用**: Refresh は失効管理を簡潔にするため **ブラックリスト対象外（初期）** とし、期限切れでのみ無効化する（将来拡張で回転/失効管理を検討）
+
+### DB（SQLite）と UUID 生成
+
+- **採用**: steering の方針に合わせ、DB 側 UUID 生成は **`gen_random_uuid()`** を使用する
+- **採用**: Timestamp のデフォルトは SQLite 互換の **`CURRENT_TIMESTAMP`** を使用する
+
+### 初期パスワード設定導線
+
+- **採用（初期）**: 起動時に `system_config` に `system_password` が無い場合、
+  - 環境変数 `INITIAL_ADMIN_PASSWORD` があればそれを bcrypt 化して保存し起動継続
+  - 無い場合は **起動エラー（明示的に設定を要求）** とする（初期設定画面は非ゴール）
+
+## レビュー観点（承認チェックリスト）
+
+sdd-cc で Design 承認するための確認項目。
+
+### セキュリティ/運用
+
+- **トークン保存**: 初期実装は `localStorage` 前提になっている（Cookie 前提の記述が混入していない）
+- **XSS 低減**: `localStorage` 採用のリスクと運用前提（CSP 等）が明記されている
+- **CSRF**: Cookie 方式を採用する場合のみ設計に含める方針になっている
+- **ログアウト**: access token の `jti` をブラックリスト登録して失効扱いにする設計になっている
+- **初期パスワード**: `INITIAL_ADMIN_PASSWORD` が無い場合の起動時挙動（起動エラー）が運用上許容できる
+
+### API/UX
+
+- **保護範囲**: login/refresh 以外の API が保護対象になっている
+- **除外パス**: `/docs`・`/openapi.json` 等の例外が妥当で、不要に広くない
+- **エラー文言**: 401/422 の `detail` が統一され、Frontend の画面遷移と矛盾しない
+
+### データ/実装整合
+
+- **SQLite 互換**: UUID/タイムスタンプの DDL 方針が steering と一致している
+- **JWT ペイロード**: access に `jti` が含まれる設計になっており、ブラックリスト設計と整合している
+
 ## アーキテクチャ
 
 ### アーキテクチャパターン
@@ -453,7 +509,9 @@ class TokenService:
 **実装ノート**
 - JWT署名アルゴリズム: HS256
 - シークレットキーは環境変数 `JWT_SECRET_KEY` から取得
-- トークンペイロード: `{ "type": "access|refresh", "exp": timestamp, "iat": timestamp }`
+- トークンペイロード（例）:
+  - access: `{ "type": "access", "jti": "<uuid>", "exp": timestamp, "iat": timestamp }`
+  - refresh: `{ "type": "refresh", "exp": timestamp, "iat": timestamp }`
 
 ---
 
@@ -511,7 +569,7 @@ async def get_current_user(
 
 **実装ノート**
 - `Authorization: Bearer <token>` 形式
-- 除外パス: `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/docs`, `/openapi.json`
+- 除外パス: `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/docs`, `/openapi.json`（必要に応じて `/redoc`）
 
 ---
 
@@ -580,11 +638,11 @@ classDiagram
 
 ```sql
 CREATE TABLE system_config (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key VARCHAR(255) UNIQUE NOT NULL,
     value TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- パスワードハッシュ保存
@@ -596,10 +654,10 @@ VALUES ('system_password', '$2b$12$...'); -- bcryptハッシュ
 
 ```sql
 CREATE TABLE token_blacklist (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     token_jti VARCHAR(255) UNIQUE NOT NULL,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 期限切れトークンの自動削除用インデックス

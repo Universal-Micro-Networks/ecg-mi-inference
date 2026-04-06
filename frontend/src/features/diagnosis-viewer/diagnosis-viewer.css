@@ -5,6 +5,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 20px;
+	color: #111827;
 }
 
 .viewer-header {
@@ -20,15 +21,16 @@
 
 .back-link {
 	text-decoration: none;
-	color: #1a1a1a;
+	color: #1d4ed8;
 	font-weight: 600;
 }
 
 .card {
 	background: #fff;
+	border: 1px solid #e5e7eb;
 	border-radius: 12px;
 	padding: 16px 20px;
-	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+	box-shadow: 0 8px 16px rgba(17, 24, 39, 0.05);
 }
 
 .card h2 {
@@ -46,7 +48,7 @@
 .label {
 	display: block;
 	font-size: 12px;
-	color: #777;
+	color: #6b7280;
 }
 
 .card-header {
@@ -60,7 +62,7 @@
 	padding: 8px 14px;
 	border-radius: 8px;
 	border: none;
-	background: #1a1a1a;
+	background: #2563eb;
 	color: #fff;
 }
 
@@ -81,7 +83,7 @@
 .badge {
 	padding: 4px 8px;
 	border-radius: 999px;
-	background: #eee;
+	background: #f3f4f6;
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
@@ -93,24 +95,25 @@
 }
 
 .badge.medium {
-	background: #fff3d6;
-	color: #8a5a00;
+	background: #fef3c7;
+	color: #92400e;
 }
 
 .badge.high {
-	background: #ffe2e2;
-	color: #a40000;
+	background: #fee2e2;
+	color: #b91c1c;
 }
 
 .progress {
 	margin-top: 12px;
 	font-size: 13px;
-	color: #666;
+	color: #6b7280;
 }
 
 .ecg-image {
 	width: 100%;
 	border-radius: 8px;
+	border: 1px solid #e5e7eb;
 	margin-top: 12px;
 }
 
@@ -125,6 +128,7 @@
 
 .dialog {
 	background: #fff;
+	border: 1px solid #e5e7eb;
 	border-radius: 12px;
 	padding: 20px;
 	width: min(420px, 90vw);
@@ -144,7 +148,14 @@
 }
 
 .dialog-actions button.secondary {
-	background: #ececec;
+	background: #ffffff;
+	border: 1px solid #d1d5db;
+	color: #374151;
+}
+
+.state.error {
+	background: #fef2f2;
+	color: #b91c1c;
 }
 
 @media (max-width: 720px) {

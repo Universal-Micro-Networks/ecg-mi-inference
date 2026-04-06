@@ -41,6 +41,7 @@ class Patient(Base):
             "id": self.id,
             "name": self.name,
             "patient_id": self.patient_id,
+            "external_id": self.patient_id,
             "age": self.age,
             "gender": self.gender,
         }
@@ -121,3 +122,28 @@ class Inference(Base):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
+
+
+class SystemConfig(Base):
+    """System-wide configuration stored in DB."""
+
+    __tablename__ = "system_config"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
+class TokenBlacklist(Base):
+    """Blacklisted access token JTIs to support logout."""
+
+    __tablename__ = "token_blacklist"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    token_jti: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

@@ -8,7 +8,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:8000/api
+      - VITE_API_URL=http://localhost:8200/api
       - VITE_PROXY_TARGET=http://backend:8000
     volumes:
       - ./frontend/src:/app/src
@@ -40,9 +40,11 @@ services:
       dockerfile: Dockerfile.backend
     container_name: ecg-mi-backend
     ports:
-      - "8000:8000"
+      - "8200:8000"
     environment:
       - DATABASE_URL=sqlite:////app/data/ecg_mi.db
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD}
     volumes:
       - ./backend/app:/app/app
       - ./backend/data:/app/data

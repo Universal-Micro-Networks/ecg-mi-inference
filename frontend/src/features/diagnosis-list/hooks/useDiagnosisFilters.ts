@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ExaminationSummary } from "../types";
+import { useEffect, useRef, useState } from "react";
 
 const useDebouncedValue = <T>(value: T, delayMs: number) => {
 	const [debouncedValue, setDebouncedValue] = useState(value);
@@ -12,26 +11,20 @@ const useDebouncedValue = <T>(value: T, delayMs: number) => {
 	return debouncedValue;
 };
 
-export const useDiagnosisFilters = (data: ExaminationSummary[]) => {
+export const useDiagnosisFilters = (onDebouncedChange?: () => void) => {
 	const [patientId, setPatientId] = useState("");
 	const [patientName, setPatientName] = useState("");
 	const debouncedPatientId = useDebouncedValue(patientId, 500);
 	const debouncedPatientName = useDebouncedValue(patientName, 500);
 
-	const filtered = useMemo(() => {
-		const idKeyword = debouncedPatientId.trim().toLowerCase();
-		const nameKeyword = debouncedPatientName.trim().toLowerCase();
-
-		return data.filter((item) => {
-			const matchId = idKeyword
-				? item.patient.external_id.toLowerCase().includes(idKeyword)
-				: true;
-			const matchName = nameKeyword
-				? item.patient.name.toLowerCase().includes(nameKeyword)
-				: true;
-			return matchId && matchName;
-		});
-	}, [data, debouncedPatientId, debouncedPatientName]);
+	const isFirstDebounced = useRef(true);
+	useEffect(() => {
+		if (isFirstDebounced.current) {
+			isFirstDebounced.current = false;
+			return;
+		}
+		onDebouncedChange?.();
+	}, [debouncedPatientId, debouncedPatientName, onDebouncedChange]);
 
 	const resetFilters = () => {
 		setPatientId("");
@@ -41,9 +34,10 @@ export const useDiagnosisFilters = (data: ExaminationSummary[]) => {
 	return {
 		patientId,
 		patientName,
+		debouncedPatientId,
+		debouncedPatientName,
 		setPatientId,
 		setPatientName,
 		resetFilters,
-		filtered,
 	};
 };

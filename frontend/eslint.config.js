@@ -20,4 +20,11 @@ export default defineConfig([
 			globals: globals.browser,
 		},
 	},
+	{
+		files: ["**/useInference.ts"],
+		rules: {
+			// 詳細の initial とポーリング結果の同期に effect 内 setState が必要（react-hooks v7 の厳格ルールは過剰）
+			"react-hooks/set-state-in-effect": "off",
+		},
+	},
 ]);
