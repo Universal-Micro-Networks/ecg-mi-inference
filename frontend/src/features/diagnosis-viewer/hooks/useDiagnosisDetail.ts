@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ExaminationDetailResponse } from "../types";
-
 import { apiFetch } from "../../../lib/auth";
+import type { ExaminationDetailResponse } from "../types";
 
 const fetchExaminationDetail = async (id: string) => {
 	const response = await apiFetch(`/api/examinations/${id}`);

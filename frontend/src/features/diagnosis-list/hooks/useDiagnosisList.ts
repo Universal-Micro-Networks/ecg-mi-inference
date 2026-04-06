@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ExaminationsListResponse } from "../types";
-
 import { apiFetch } from "../../../lib/auth";
+import type { ExaminationsListResponse } from "../types";
 
 type Params = {
 	examDate: string;

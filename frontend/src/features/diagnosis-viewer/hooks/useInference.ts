@@ -1,8 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { InferenceDetail, InferenceStatusResponse } from "../types";
-
 import { apiFetch } from "../../../lib/auth";
+import type { InferenceDetail, InferenceStatusResponse } from "../types";
 
 const fetchInferenceStatus = async (examinationId: string) => {
 	const response = await apiFetch(`/api/inferences/${examinationId}`);

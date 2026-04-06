@@ -14,7 +14,9 @@ const getClassName = (strength: Strength) => {
 
 export const PasswordStrengthIndicator = ({
 	strength,
-}: { strength: Strength }) => (
+}: {
+	strength: Strength;
+}) => (
 	<div className={`auth-password-strength ${getClassName(strength)}`}>
 		パスワード強度: {getLabel(strength)}
 	</div>

@@ -12,7 +12,10 @@ type Props = {
 const SortIndicator = ({
 	active,
 	order,
-}: { active: boolean; order: string }) => {
+}: {
+	active: boolean;
+	order: string;
+}) => {
 	if (!active) {
 		return null;
 	}

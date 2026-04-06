@@ -1,10 +1,14 @@
 {
-	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
 	"files": {
-		"ignore": ["dist", "node_modules"]
+		"includes": ["**", "!**/dist", "!**/node_modules"]
 	},
-	"organizeImports": {
-		"enabled": true
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
 	},
 	"linter": {
 		"enabled": true,
@@ -14,7 +18,9 @@
 	},
 	"overrides": [
 		{
-			"include": ["src/features/diagnosis-list/hooks/useDiagnosisFilters.ts"],
+			"includes": [
+				"**/src/features/diagnosis-list/hooks/useDiagnosisFilters.ts"
+			],
 			"linter": {
 				"rules": {
 					"correctness": {
