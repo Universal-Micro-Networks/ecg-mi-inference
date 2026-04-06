@@ -147,6 +147,7 @@ __pycache__/
 # Backend runtime (SQLite / importer output / ECG cache — generated locally)
 backend/data/*.db
 backend/data/ecg_cache/
+backend/data/waves/
 backend/processed/
 
 # Local MFER/XML samples (not versioned)

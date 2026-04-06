@@ -57,6 +57,7 @@ class Examination(Base):
         String(36), ForeignKey("patients.id"), nullable=False, index=True
     )
     exam_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    mfer_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     csv_file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     ecg_image_cache_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     ecg_image_etag: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -77,6 +78,7 @@ class Examination(Base):
         result = {
             "id": self.id,
             "exam_date": self.exam_date.isoformat(),
+            "mfer_file_path": self.mfer_file_path,
             "csv_file_path": self.csv_file_path,
             "notes": self.notes,
         }

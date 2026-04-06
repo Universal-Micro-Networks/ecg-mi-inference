@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { apiFetch } from "../../../lib/auth";
 
-export const useEcgImage = (examinationId: string) => {
+export const useEcgImage = (examinationId: string, cacheKey = 0) => {
 	const [imageUrl, setImageUrl] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -19,8 +19,9 @@ export const useEcgImage = (examinationId: string) => {
 			try {
 				setIsLoading(true);
 				setError(null);
+				const qs = cacheKey ? `?v=${encodeURIComponent(String(cacheKey))}` : "";
 				const response = await apiFetch(
-					`/api/examinations/${examinationId}/ecg-image`,
+					`/api/examinations/${examinationId}/ecg-image${qs}`,
 					{
 						signal: controller.signal,
 					},
@@ -59,7 +60,7 @@ export const useEcgImage = (examinationId: string) => {
 				URL.revokeObjectURL(objectUrl);
 			}
 		};
-	}, [examinationId]);
+	}, [examinationId, cacheKey]);
 
 	return { imageUrl, isLoading, error };
 };

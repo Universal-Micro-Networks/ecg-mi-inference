@@ -3,6 +3,7 @@ Examination API endpoints.
 Handles examination list, detail, and ECG image retrieval.
 """
 
+import os
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -10,7 +11,8 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..ecg_service import generate_ecg_image
+from ..ecg_service import generate_ecg_image, get_ecg_cache_path
+from ..mfer_wave_export import MferWaveExportError, export_mfer_wave_csv
 from ..models import Examination, Inference, Patient
 
 router = APIRouter()
@@ -82,6 +84,7 @@ def list_examinations(
                 "id": exam.id,
                 "patient": exam.patient.to_dict(),
                 "exam_date": exam.exam_date.isoformat(),
+                "mfer_file_path": exam.mfer_file_path,
                 "csv_file_path": exam.csv_file_path,
                 "notes": exam.notes,
             }
@@ -116,14 +119,54 @@ def get_examination(
         "id": exam.id,
         "patient": exam.patient.to_dict(),
         "exam_date": exam.exam_date.isoformat(),
+        "created_at": exam.created_at.isoformat(),
+        "mfer_file_path": exam.mfer_file_path,
         "csv_file_path": exam.csv_file_path,
         "notes": exam.notes,
     }
 
     if latest_inference:
-        result["latest_inference"] = latest_inference.to_dict()
+        inf = latest_inference.to_dict()
+        result["latest_inference"] = inf
+        result["inference"] = {"status": latest_inference.status}
 
     return result
+
+
+@router.post("/examinations/{examination_id}/export-wave-csv")
+def export_examination_wave_csv(
+    examination_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Re-read MFER waveform and write CSV (mfer_tools.extract_mfer_data + save_wave_csv).
+    Updates csv_file_path to the new CSV; clears ECG PNG cache for old and new paths.
+    """
+    exam = db.query(Examination).filter(Examination.id == examination_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Examination not found")
+
+    old_csv = exam.csv_file_path
+    try:
+        new_path = export_mfer_wave_csv(examination_id, exam)
+    except MferWaveExportError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    for path in {old_csv, new_path}:
+        if not path:
+            continue
+        try:
+            cache_file = get_ecg_cache_path(path)
+            if os.path.isfile(cache_file):
+                os.remove(cache_file)
+        except OSError:
+            pass
+
+    exam.csv_file_path = new_path
+    exam.ecg_image_etag = None
+    db.commit()
+
+    return {"csv_file_path": new_path, "message": "波形 CSV を出力しました"}
 
 
 @router.get("/examinations/{examination_id}/ecg-image")

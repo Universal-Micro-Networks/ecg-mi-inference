@@ -184,6 +184,7 @@ def _update_exam_file_path(exam_id: str, moved_to: Path) -> None:
         if not exam:
             return
         exam.csv_file_path = str(moved_to)
+        exam.mfer_file_path = str(moved_to)
         note = exam.notes or ""
         exam.notes = f"{note} moved_mfer_path={moved_to}".strip()
         db.commit()

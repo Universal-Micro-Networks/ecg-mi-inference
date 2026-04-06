@@ -123,7 +123,7 @@ backend/
 │   ├── data.py              # Legacy sample data (deprecated)
 │   └── api/
 │       ├── __init__.py
-│       ├── examinations.py  # GET /api/examinations, GET /api/examinations/{id}, GET /api/examinations/{id}/ecg-image
+│       ├── examinations.py  # examinations + ecg-image + export-wave-csv
 │       └── inferences.py    # POST /api/inferences, GET /api/inferences/{id}
 ├── data/
 │   ├── ecg_mi.db           # SQLite database (auto-created)
@@ -140,7 +140,8 @@ backend/
   - Query params: `exam_date` (required), `sort_by`, `sort_order`, `patient_id`, `patient_name`, `limit`, `offset`
   - Response: `{ "items": [...], "total": <number> }`
 
-- `GET /api/examinations/{examination_id}` - Get examination detail
+- `GET /api/examinations/{examination_id}` - Get examination detail（`mfer_file_path` / `csv_file_path` / `created_at` など）
+- `POST /api/examinations/{examination_id}/export-wave-csv` - MFER を再読込し `mfer_tools.extract_mfer_data` + `save_wave_csv` で波形 CSV を `data/waves/{id}.csv` に出力し、`csv_file_path` を更新
 
 - `GET /api/examinations/{examination_id}/ecg-image` - Get ECG image as PNG
   - Returns ETag headers for caching

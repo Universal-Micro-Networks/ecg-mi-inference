@@ -2,13 +2,16 @@
 Database configuration and session management.
 """
 
+import logging
 import os
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from .models import Base
+
+logger = logging.getLogger(__name__)
 
 # Use SQLite database in backend/data directory
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -24,6 +27,25 @@ engine = create_engine(
 
 # Create tables
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_sqlite_schema() -> None:
+    """Add columns introduced after first deploy (SQLite has no ALTER in metadata)."""
+    if not DATABASE_URL.startswith("sqlite:"):
+        return
+    try:
+        insp = inspect(engine)
+        cols = {c["name"] for c in insp.get_columns("examinations")}
+        if "mfer_file_path" not in cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE examinations ADD COLUMN mfer_file_path VARCHAR(500)")
+                )
+    except Exception:
+        logger.warning("ensure_sqlite_schema failed", exc_info=True)
+
+
+ensure_sqlite_schema()
 
 # Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

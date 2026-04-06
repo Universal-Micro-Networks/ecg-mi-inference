@@ -66,6 +66,39 @@
 	color: #fff;
 }
 
+.card-header button.secondary {
+	background: #ffffff;
+	color: #374151;
+	border: 1px solid #d1d5db;
+}
+
+.card-header button.secondary:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+.examination-info-header h2 {
+	margin: 0;
+}
+
+.card-grid-full {
+	grid-column: 1 / -1;
+}
+
+.path-line {
+	display: block;
+	font-size: 13px;
+	word-break: break-all;
+	color: #374151;
+}
+
+.inline-error {
+	margin-top: 12px;
+	padding: 10px 12px;
+	border-radius: 8px;
+	font-size: 14px;
+}
+
 .status-row {
 	margin-top: 8px;
 	display: flex;
