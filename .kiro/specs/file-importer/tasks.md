@@ -21,7 +21,9 @@
 - [x] 患者 upsert 相当を実装（`external_id` 基準）
 - [x] 診察重複判定を実装（`patient_id + exam_date`）
 - [x] 診察レコード作成時に以下を設定
-  - [x] MFERの絶対パスを保持（現スキーマでは `notes` と `csv_file_path` に格納）
+  - [x] `mfer_file_path` に MFER の絶対パスを保持（移動後は processed 上のパスへ更新）
+  - [x] `csv_file_path` にファイルパスを保持（スキーマ上必須のため、初回は元 `.mwf` パス、移動後は移動先 `.mwf` と同期）
+  - [x] 補助メタデータは `notes` に格納（従来どおり）
   - [x] `inference_status='未実行'` 相当（`Inference` 初期レコード作成）
 - [x] 登録処理を単一トランザクション化
 

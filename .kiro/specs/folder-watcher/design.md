@@ -35,7 +35,7 @@
 ### `backend/app/file_importer.py`
 
 - `import_mfer_file(file_path: str)`
-  - `file-importer` 連携の呼び出し境界（現時点はプレースホルダ）
+  - `file-importer` のエントリ。`folder-watcher` は検出した絶対パスをこの関数に渡す（`main.py` で注入）
 
 ### `backend/app/main.py`
 

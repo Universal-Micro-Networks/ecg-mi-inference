@@ -76,7 +76,8 @@ exam_time = header.get("MWF_TIM")
 - 診察:
   - `(patient_id, exam_date)` で重複判定
   - 重複時はスキップ + WARNING ログ
-  - 非重複時は作成（`mfer_file_path`, `inference_status='未実行'`）
+  - 非重複時は作成（`mfer_file_path` と `csv_file_path` に取り込み元の `.mwf` 絶対パス、`inference_status='未実行'`）
+  - processed/error へファイル移動後は `mfer_file_path` / `csv_file_path` を移動先パスに更新（波形 CSV はインポート時には生成しない）
 
 ### 5. Transaction / Error
 

@@ -7,10 +7,11 @@
 フロントエンド機能である。
 
 **責務境界:**
-- **diagnosis-viewer（本機能）**: 診察詳細の表示、患者情報表示、心電図可視化、推論結果表示、推論実行
+- **diagnosis-viewer（本機能）**: 診察詳細の表示、患者情報表示、心電図可視化、推論結果表示、推論実行、（利用者操作に応じた）MFER 再読込による波形 CSV の再生成要求
 - **diagnosis-list**: 診察選択（本機能への遷移トリガー）
 - **ecg-mi-inferencer（別途定義）**: 心電図波形解析、心筋梗塞リスク推論実行、推論結果の返却
 - **file-importer**: 診察データ・患者データのDB登録（本機能のデータソース）
+- **バックエンド（診察 API）**: `mfer_tools.extract_mfer_data` / `save_wave_csv` により MFER から波形 CSV を `data/waves/{診察ID}.csv` に出力し、`csv_file_path` を更新（詳細画面のボタンから `POST` で起動）
 
 **関連ユースケース:**
 - UC-4: システムユーザーは診察データを選択し、結果・患者データ・心電図を参照できる
@@ -74,6 +75,19 @@
 7. When 心電図データが存在しない場合, 診察詳細表示機能 shall 「心電図データがありません」というメッセージを表示する
 8. 診察詳細表示機能 shall 心電図波形のズーム・パン操作を提供する
 9. 診察詳細表示機能 shall 表示範囲のリセットボタンを提供する
+
+### 要件4-拡張: MFER から波形 CSV の再出力
+
+**目的:** 医療従事者として、保存されている MFER を再度読み込み、心電図表示用の波形 CSV を取り直したい。
+これにより、インポート後に CSV を再生成した場合でも最新の波形に基づく画像表示に更新できる。
+
+#### 受け入れ基準
+
+1. 診察詳細表示機能 shall 診察情報エリアに「MFERから波形CSVを出力」操作（ボタン等）を提供する
+2. When 当該操作が実行される, 診察詳細表示機能 shall 認可付きで `POST /api/examinations/{examination_id}/export-wave-csv` を呼び出す
+3. バックエンド shall 解決した `.mwf` に対し `mfer_tools.extract_mfer_data` と `save_wave_csv` で波形 CSV を書き出し、診察の `csv_file_path` をそのパスに更新する
+4. When エクスポートが成功する, 診察詳細表示機能 shall 診察詳細の再取得と心電図画像の再取得（キャッシュバイパス）を行い、更新後の波形を表示する
+5. When MFER が見つからない・読み込みに失敗する, 診察詳細表示機能 shall エラーメッセージを表示する
 
 ### 要件5: 推論結果の表示
 
@@ -162,7 +176,7 @@
 |------------|------|------|
 | `id` | UUID | 診察ID |
 | `exam_date` | DateTime | 検査日時 |
-| `mfer_file_path` | String | MFERファイルのパス |
+| `mfer_file_path` | String \| null | MFERファイルのパス（未設定時は null） |
 | `created_at` | DateTime | 登録日時 |
 | `patient` | Object | 患者情報 |
 | `patient.id` | UUID | 患者ID |
@@ -175,7 +189,16 @@
 | `inference.risk_score` | Float | リスクスコア（0.0-100.0） |
 | `inference.risk_level` | String | リスクレベル（低/中/高） |
 | `inference.executed_at` | DateTime | 推論実行日時 |
-| `csv_file_path` | String | CSVファイルのパス（心電図波形データ） |
+| `csv_file_path` | String | CSVファイルのパス（心電図波形データ。エクスポート後は `data/waves/{診察ID}.csv` を指す） |
+
+### 波形 CSV エクスポート API
+
+| 項目 | 内容 |
+|------|------|
+| メソッド・パス | `POST /api/examinations/{examination_id}/export-wave-csv` |
+| 認可 | JWT（Bearer）必須 |
+| 成功時レスポンス | 診察オブジェクトの一部（更新後の `csv_file_path` 等を含む） |
+| 失敗時 | MFER 未検出・`mfer_tools` エラー等は 4xx/5xx と `detail` メッセージ |
 
 ### 推論実行APIリクエスト
 
@@ -221,6 +244,7 @@ flowchart TB
 
     subgraph BE["Backend (FastAPI)"]
         EP1["GET /api/examinations/:id<br/>診察詳細取得"]
+        EP1b["POST .../export-wave-csv<br/>MFER→波形CSV"]
         EP2["POST /api/inferences<br/>推論実行"]
         EP3["GET /api/inferences/:id<br/>推論結果取得"]
         ES["ExaminationService<br/>InferenceService"]
@@ -237,9 +261,11 @@ flowchart TB
     end
 
     API --> EP1
+    API --> EP1b
     API --> EP2
     API --> EP3
     EP1 --> ES
+    EP1b --> ES
     EP2 --> ES
     EP3 --> ES
     ES --> DB
@@ -264,6 +290,7 @@ flowchart TB
 │  [診察情報]                                             │
 │  検査日時: 2025-12-07 14:30:00                         │
 │  診察ID: 123e4567-e89b-12d3-a456-426614174000          │
+│  [MFERから波形CSVを出力]  MFER/CSVパス表示             │
 ├─────────────────────────────────────────────────────────┤
 │  [推論結果]                      [推論実行]             │
 │  ステータス: ● 完了                                     │
@@ -290,7 +317,7 @@ flowchart TB
 | 用語 | 定義 |
 |------|------|
 | 診察詳細 | 1回の心電図検査に対応する全ての情報（患者情報、診察情報、心電図、推論結果） |
-| 心電図波形 | CSVファイルに保存された時系列の心電図データ |
+| 心電図波形 | CSVファイルに保存された時系列の心電図データ（詳細画面から MFER 再読込で CSV を再生成可能） |
 | 12誘導 | 心電図の標準的な12個の測定位置（I, II, III, aVR, aVL, aVF, V1-V6） |
 | 推論結果 | AIによる心筋梗塞リスク推論の出力（リスクスコア、リスクレベル） |
 | リスクスコア | 0-100%の数値で表される心筋梗塞リスクの程度 |
@@ -299,7 +326,7 @@ flowchart TB
 
 ---
 
-**ステータス:** レビュー待ち
+**ステータス:** 実装追随更新済み（MFER→CSV 再出力）
 **作成日:** 2025-12-07
-**最終更新:** 2025-12-07
+**最終更新:** 2026-04-07
 

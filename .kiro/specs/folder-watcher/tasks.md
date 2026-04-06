@@ -27,6 +27,6 @@
 
 ## 残課題
 
-- [ ] file-importer 本実装との接続（現在はプレースホルダ）
+- [x] `file-importer` 本実装との接続（`main.py` の lifespan で `FolderWatcherService(importer_func=import_mfer_file)` により接続済み）
 - [ ] 監視フォルダ未存在時のポーリング挙動を統合テスト化
 - [ ] 稼働統計ログ内容の詳細検証

@@ -10,11 +10,15 @@
 
 ## API設計
 - `GET /api/examinations/{id}`
-  - Response: 診察詳細 (患者情報、推論情報、CSVパス)
+  - Response: 診察詳細（患者情報、`mfer_file_path`、`csv_file_path`、`created_at`、推論サマリ等）
+- `POST /api/examinations/{id}/export-wave-csv`
+  - 認可: JWT 必須
+  - 処理: DB / `notes` から `.mwf` を解決し、`mfer_tools.extract_mfer_data` + `save_wave_csv` で `data/waves/{id}.csv` に保存、`csv_file_path` 更新、ECG PNG キャッシュ無効化
+  - Response: 更新後の診察フィールド（少なくとも `csv_file_path`）
 - `GET /api/examinations/{id}/ecg-image`
   - Response: `image/png`
   - 処理: CSVから心電図波形画像を生成して返却
-  - キャッシュ: サーバー側で生成結果をキャッシュ
+  - キャッシュ: サーバー側で生成結果をキャッシュ（クエリ `?v=` でクライアント側バイパス可能）
 - `POST /api/inferences`
   - Body: `{ "examination_id": "..." }`
   - Response: 推論ステータス
@@ -36,10 +40,12 @@
 ### ViewModel (Hooks)
 - `useDiagnosisDetail`
   - 診察詳細取得
-- `useEcgImage`
-  - 画像取得 (blob) とURL生成
+- `useEcgImage(examinationId, cacheKey)`
+  - 画像取得（blob）と Object URL 生成。`cacheKey !== 0` のとき `ecg-image?v=...` を付与し CSV 再生成後の再取得に対応
 - `useInference`
   - 推論実行、ポーリング管理
+- 詳細ページ（`DiagnosisViewerPage`）
+  - `export-wave-csv` のミューテーション、成功時に詳細クエリ無効化と `cacheKey` インクリメント
 
 ### 状態管理
 - サーバー状態: TanStack Query
@@ -56,6 +62,10 @@
 - APIで生成した画像を `<img>` で表示
 - 読み込み中はローディング
 - 画像なし/取得失敗時はメッセージ表示
+- MFER から CSV 再出力後は `useEcgImage` の `cacheKey` を変えて再フェッチ
+
+## MFER → 波形 CSV（診察情報カード）
+- `ExaminationInfoCard`: エクスポートボタン、MFER/CSV パス表示、API エラー表示
 
 ## 推論ポーリング
 - ステータスが「実行中」の間のみ 5秒間隔で再取得
@@ -70,6 +80,7 @@
 - 推論実行の確認ダイアログ
 - 推論中のポーリング停止条件
 - 心電図画像の表示/エラー表示
+- 波形 CSV エクスポート API（バックエンド単体テストでモック）
 
 ## 非機能
 - 診察詳細: 2秒以内

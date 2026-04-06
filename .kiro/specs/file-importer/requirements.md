@@ -207,7 +207,9 @@
 | patient_id | UUID | 患者への参照（FK） |
 | exam_date | TIMESTAMP | 検査日時 |
 | exam_type | VARCHAR | 検査種別 |
-| mfer_file_path | VARCHAR | MFERファイルのパス |
+| mfer_file_path | VARCHAR | MFERファイルのパス（nullable。インポート時・移動後に設定） |
+| csv_file_path | VARCHAR | ファイルパス（スキーマ上必須。インポート直後は `.mwf`、波形 CSV 生成後は `.csv` を指し得る） |
+| notes | TEXT | 補助メタデータ・移動履歴パス等 |
 | inference_status | VARCHAR | 推論ステータス（未実行/実行中/完了/エラー） |
 | created_at | TIMESTAMP | 登録日時 |
 
