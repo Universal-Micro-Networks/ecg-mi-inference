@@ -18,7 +18,11 @@ export const ConfirmDialog = ({
 	}
 
 	return (
-		<div className="dialog-backdrop" role="presentation">
+		<div
+			className="dialog-backdrop"
+			data-prevent-panel-escape="true"
+			role="presentation"
+		>
 			<dialog className="dialog" aria-modal="true" open>
 				<h3>{title}</h3>
 				<p>{description}</p>

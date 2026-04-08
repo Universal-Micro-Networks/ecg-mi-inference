@@ -7,6 +7,8 @@ import { useAuth } from "../hooks/useAuth";
 import { PasswordStrengthIndicator } from "./PasswordStrengthIndicator";
 import "../auth.css";
 
+const APP_DISPLAY_NAME = "心筋梗塞診断支援システム";
+
 const getStrength = (value: string): "weak" | "medium" | "strong" => {
 	if (!value) return "weak";
 	const hasUpper = /[A-Z]/.test(value);
@@ -44,40 +46,42 @@ export const LoginPage = () => {
 
 	return (
 		<div className="auth-login-page">
-			<h1 className="auth-login-title">ログイン</h1>
-			<form onSubmit={onSubmit}>
-				<label htmlFor={passwordInputId} className="auth-login-label">
-					パスワード
-				</label>
-				<div className="auth-login-input-row">
-					<input
-						id={passwordInputId}
-						type={showPassword ? "text" : "password"}
-						value={password}
-						onChange={(e) => setPassword(e.target.value)}
-						className="auth-login-input"
-						aria-label="パスワード"
-					/>
+			<div className="auth-login-shell">
+				<h1 className="auth-app-name">{APP_DISPLAY_NAME}</h1>
+				<form onSubmit={onSubmit} aria-label="認証">
+					<label htmlFor={passwordInputId} className="auth-login-label">
+						パスワード
+					</label>
+					<div className="auth-login-input-row">
+						<input
+							id={passwordInputId}
+							type={showPassword ? "text" : "password"}
+							value={password}
+							onChange={(e) => setPassword(e.target.value)}
+							className="auth-login-input"
+							aria-label="パスワード"
+						/>
+						<button
+							type="button"
+							onClick={() => setShowPassword((v) => !v)}
+							className="auth-login-toggle"
+						>
+							{showPassword ? "隠す" : "表示"}
+						</button>
+					</div>
+					<PasswordStrengthIndicator strength={getStrength(password)} />
+
+					{error ? <div className="auth-login-error">{error}</div> : null}
+
 					<button
-						type="button"
-						onClick={() => setShowPassword((v) => !v)}
-						className="auth-login-toggle"
+						type="submit"
+						disabled={!password || isLoading}
+						className="auth-login-submit"
 					>
-						{showPassword ? "隠す" : "表示"}
+						{isLoading ? "ログイン中..." : "ログイン"}
 					</button>
-				</div>
-				<PasswordStrengthIndicator strength={getStrength(password)} />
-
-				{error ? <div className="auth-login-error">{error}</div> : null}
-
-				<button
-					type="submit"
-					disabled={!password || isLoading}
-					className="auth-login-submit"
-				>
-					{isLoading ? "ログイン中..." : "ログイン"}
-				</button>
-			</form>
+				</form>
+			</div>
 		</div>
 	);
 };

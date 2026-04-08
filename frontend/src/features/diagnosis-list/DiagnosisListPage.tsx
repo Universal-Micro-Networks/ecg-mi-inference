@@ -1,14 +1,21 @@
-import { useCallback, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useState,
+} from "react";
+import { useSearchParams } from "react-router-dom";
+import { DiagnosisDetailPanel } from "./components/DiagnosisDetailPanel";
 import { DiagnosisTable } from "./components/DiagnosisTable";
 import { EmptyState } from "./components/EmptyState";
 import { ErrorState } from "./components/ErrorState";
 import { FilterPanel } from "./components/FilterPanel";
+import { ListPagination } from "./components/ListPagination";
 import "./diagnosis-list.css";
-import { apiFetch } from "../../lib/auth";
 import { useDiagnosisFilters } from "./hooks/useDiagnosisFilters";
 import { useDiagnosisList } from "./hooks/useDiagnosisList";
-import { useRowSelection } from "./hooks/useRowSelection";
+import { useExaminationsSse } from "./hooks/useExaminationsSse";
 import { useSortQueryParams } from "./hooks/useSortQueryParams";
 
 const formatUpdatedAt = (timestamp?: number) => {
@@ -25,6 +32,13 @@ const formatUpdatedAt = (timestamp?: number) => {
 };
 
 export const DiagnosisListPage = () => {
+	useExaminationsSse();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const detailParam = searchParams.get("detail")?.trim() ?? "";
+
+	const [renderId, setRenderId] = useState<string | null>(null);
+	const [panelOpen, setPanelOpen] = useState(false);
+
 	const {
 		examDate,
 		sortBy,
@@ -36,61 +50,89 @@ export const DiagnosisListPage = () => {
 		setOffset,
 	} = useSortQueryParams();
 
-	const handleFilterDebounced = useCallback(() => {
+	const handlePatientFiltersCommitted = useCallback(() => {
 		setOffset(0);
 	}, [setOffset]);
 
 	const {
-		patientId,
-		patientName,
-		debouncedPatientId,
-		debouncedPatientName,
-		setPatientId,
-		setPatientName,
-		resetFilters,
-	} = useDiagnosisFilters(handleFilterDebounced);
+		patientIdInput,
+		patientNameInput,
+		committedPatientId,
+		committedPatientName,
+		setPatientIdInput,
+		setPatientNameInput,
+		commitPatientFilters,
+	} = useDiagnosisFilters(handlePatientFiltersCommitted);
 
-	const {
-		data,
-		isLoading,
-		isError,
-		error,
-		refetch,
-		isFetching,
-		dataUpdatedAt,
-	} = useDiagnosisList({
-		examDate,
-		sortBy,
-		sortOrder,
-		patientId: debouncedPatientId,
-		patientName: debouncedPatientName,
-		limit,
-		offset,
-	});
-	const { selectedId, selectRow } = useRowSelection();
-	const [isSubmitting, setIsSubmitting] = useState(false);
-	const [submitError, setSubmitError] = useState<string | null>(null);
+	const { data, isLoading, isError, error, isFetching, dataUpdatedAt } =
+		useDiagnosisList({
+			examDate,
+			sortBy,
+			sortOrder,
+			patientId: committedPatientId,
+			patientName: committedPatientName,
+			limit,
+			offset,
+		});
+
+	useLayoutEffect(() => {
+		if (detailParam) {
+			setRenderId(detailParam);
+		}
+	}, [detailParam]);
+
+	useEffect(() => {
+		if (renderId && detailParam === renderId) {
+			const id = requestAnimationFrame(() => {
+				requestAnimationFrame(() => setPanelOpen(true));
+			});
+			return () => cancelAnimationFrame(id);
+		}
+	}, [renderId, detailParam]);
+
+	useEffect(() => {
+		if (!detailParam && renderId && panelOpen) {
+			setPanelOpen(false);
+		}
+	}, [detailParam, renderId, panelOpen]);
+
+	const openDetail = useCallback(
+		(id: string) => {
+			const next = new URLSearchParams(searchParams);
+			next.set("detail", id);
+			setSearchParams(next);
+		},
+		[searchParams, setSearchParams],
+	);
+
+	const requestClosePanel = useCallback(() => setPanelOpen(false), []);
+
+	const onPanelClosed = useCallback(() => {
+		setRenderId(null);
+		setSearchParams(
+			(prev) => {
+				const next = new URLSearchParams(prev);
+				if (!next.get("detail")) {
+					return prev;
+				}
+				next.delete("detail");
+				return next;
+			},
+			{ replace: true },
+		);
+	}, [setSearchParams]);
 
 	const items = data?.items ?? [];
 	const total = data?.total ?? 0;
 
-	const rangeLabel = useMemo(() => {
+	const recordCountLabel = useMemo(() => {
 		if (total === 0) {
-			return "0 件";
+			return "該当 0 件";
 		}
 		const from = offset + 1;
 		const to = Math.min(offset + items.length, total);
-		return `${from}〜${to} 件 / 全 ${total} 件`;
+		return `${from}〜${to} 件を表示 / 合計 ${total} 件`;
 	}, [items.length, offset, total]);
-
-	const handleClear = () => {
-		resetFilters();
-		setExamDate(new Date().toISOString().slice(0, 10));
-		setOffset(0);
-	};
-
-	const canPrev = offset > 0;
-	const canNext = offset + items.length < total;
 
 	if (isLoading) {
 		return <div className="state loading">読み込み中...</div>;
@@ -100,92 +142,66 @@ export const DiagnosisListPage = () => {
 		return <ErrorState message={(error as Error).message} />;
 	}
 
-	const handleRunInference = async () => {
-		if (!selectedId) {
-			return;
-		}
-		try {
-			setIsSubmitting(true);
-			setSubmitError(null);
-			const response = await apiFetch("/api/inferences", {
-				method: "POST",
-				body: JSON.stringify({ examination_id: selectedId }),
-			});
-			if (!response.ok) {
-				throw new Error("推論実行に失敗しました");
-			}
-		} catch (submitError) {
-			setSubmitError((submitError as Error).message);
-		} finally {
-			setIsSubmitting(false);
-		}
-	};
-
 	return (
 		<div className="diagnosis-page">
-			<header>
-				<h1>診察一覧</h1>
-			</header>
-			<FilterPanel
-				examDate={examDate}
-				patientId={patientId}
-				patientName={patientName}
-				onExamDateChange={setExamDate}
-				onPatientIdChange={setPatientId}
-				onPatientNameChange={setPatientName}
-				onClear={handleClear}
-				onRefresh={refetch}
-				isRefreshing={isFetching}
-			/>
-			<div className="pagination-bar">
-				<span className="pagination-range">{rangeLabel}</span>
-				<div className="pagination-controls">
-					<button
-						type="button"
-						className="secondary"
-						disabled={!canPrev || isFetching}
-						onClick={() => setOffset(Math.max(0, offset - limit))}
-					>
-						前へ
-					</button>
-					<button
-						type="button"
-						className="secondary"
-						disabled={!canNext || isFetching}
-						onClick={() => setOffset(offset + limit)}
-					>
-						次へ
-					</button>
-				</div>
-			</div>
-			{items.length === 0 ? (
-				<EmptyState message="該当する診察データがありません" />
-			) : (
-				<DiagnosisTable
-					data={items}
-					selectedId={selectedId}
-					sortBy={sortBy}
-					sortOrder={sortOrder}
-					onSort={setSort}
-					onSelect={selectRow}
+			<header className="diagnosis-list-header">
+				<FilterPanel
+					examDate={examDate}
+					patientId={patientIdInput}
+					patientName={patientNameInput}
+					onExamDateChange={setExamDate}
+					onExamDateToday={() =>
+						setExamDate(new Date().toISOString().slice(0, 10))
+					}
+					onExamDateAll={() => setExamDate("")}
+					onPatientIdChange={setPatientIdInput}
+					onPatientNameChange={setPatientNameInput}
+					onPatientFiltersCommit={commitPatientFilters}
 				/>
-			)}
-			{selectedId && (
-				<div className="action-bar">
-					<Link to={`/diagnoses/${selectedId}`}>診察詳細を開く</Link>
-					<button
-						type="button"
-						onClick={handleRunInference}
-						disabled={isSubmitting}
-					>
-						{isSubmitting ? "推論中..." : "推論実行"}
-					</button>
+			</header>
+
+			<main className="diagnosis-list-body">
+				{items.length === 0 ? (
+					<EmptyState message="該当する診察データがありません" />
+				) : (
+					<div className="diagnosis-table-wrap">
+						<DiagnosisTable
+							data={items}
+							sortBy={sortBy}
+							sortOrder={sortOrder}
+							onSort={setSort}
+							onOpenDetail={openDetail}
+						/>
+					</div>
+				)}
+			</main>
+
+			<footer className="diagnosis-list-footer">
+				<div className="diagnosis-list-footer__left">
+					<span className="record-count">{recordCountLabel}</span>
+					{dataUpdatedAt ? (
+						<span className="last-updated-inline">
+							最終更新: {formatUpdatedAt(dataUpdatedAt)}
+						</span>
+					) : null}
 				</div>
-			)}
-			{submitError && <ErrorState message={submitError} />}
-			<footer className="last-updated">
-				{dataUpdatedAt ? `最終更新: ${formatUpdatedAt(dataUpdatedAt)}` : ""}
+				<div className="diagnosis-list-footer__right">
+					<ListPagination
+						total={total}
+						limit={limit}
+						offset={offset}
+						isBusy={isFetching}
+						onOffsetChange={setOffset}
+					/>
+				</div>
 			</footer>
+
+			<DiagnosisDetailPanel
+				renderId={renderId}
+				panelOpen={panelOpen}
+				onRequestClose={requestClosePanel}
+				onPanelClosed={onPanelClosed}
+			/>
 		</div>
 	);
 };

@@ -1,43 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
-const useDebouncedValue = <T>(value: T, delayMs: number) => {
-	const [debouncedValue, setDebouncedValue] = useState(value);
+/**
+ * 患者ID・氏名は入力欄の値と API に渡す値を分離し、明示的な確定（Enter）まで検索しない。
+ */
+export const useDiagnosisFilters = (onCommitted?: () => void) => {
+	const [patientIdInput, setPatientIdInput] = useState("");
+	const [patientNameInput, setPatientNameInput] = useState("");
+	const [committedPatientId, setCommittedPatientId] = useState("");
+	const [committedPatientName, setCommittedPatientName] = useState("");
 
-	useEffect(() => {
-		const timer = window.setTimeout(() => setDebouncedValue(value), delayMs);
-		return () => window.clearTimeout(timer);
-	}, [value, delayMs]);
-
-	return debouncedValue;
-};
-
-export const useDiagnosisFilters = (onDebouncedChange?: () => void) => {
-	const [patientId, setPatientId] = useState("");
-	const [patientName, setPatientName] = useState("");
-	const debouncedPatientId = useDebouncedValue(patientId, 500);
-	const debouncedPatientName = useDebouncedValue(patientName, 500);
-
-	const isFirstDebounced = useRef(true);
-	useEffect(() => {
-		if (isFirstDebounced.current) {
-			isFirstDebounced.current = false;
-			return;
-		}
-		onDebouncedChange?.();
-	}, [debouncedPatientId, debouncedPatientName, onDebouncedChange]);
-
-	const resetFilters = () => {
-		setPatientId("");
-		setPatientName("");
-	};
+	const commitPatientFilters = useCallback(() => {
+		setCommittedPatientId(patientIdInput);
+		setCommittedPatientName(patientNameInput);
+		onCommitted?.();
+	}, [patientIdInput, patientNameInput, onCommitted]);
 
 	return {
-		patientId,
-		patientName,
-		debouncedPatientId,
-		debouncedPatientName,
-		setPatientId,
-		setPatientName,
-		resetFilters,
+		patientIdInput,
+		patientNameInput,
+		committedPatientId,
+		committedPatientName,
+		setPatientIdInput,
+		setPatientNameInput,
+		commitPatientFilters,
 	};
 };

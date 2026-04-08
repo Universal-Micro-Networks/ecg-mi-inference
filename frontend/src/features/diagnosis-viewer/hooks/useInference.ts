@@ -36,16 +36,31 @@ export const useInference = (
 	const [result, setResult] = useState<InferenceStatusResponse | null>(null);
 
 	useEffect(() => {
-		if (initial?.status) {
+		if (!initial) {
+			return;
+		}
+		if (initial.status) {
 			setStatus(initial.status);
 		}
-	}, [initial?.status]);
+		if (
+			initial.status === "完了" &&
+			(initial.risk_level != null || initial.risk_score != null)
+		) {
+			setResult({
+				status: "完了",
+				risk_level: initial.risk_level,
+				risk_score: initial.risk_score,
+				executed_at: initial.executed_at,
+			});
+		}
+	}, [initial]);
 
 	const inferenceQuery = useQuery({
 		queryKey: ["inference-status", examinationId],
 		queryFn: () => fetchInferenceStatus(examinationId),
 		enabled: Boolean(examinationId) && status === "実行中",
-		refetchInterval: status === "実行中" ? 5000 : false,
+		// モック完了が秒未満のため短め。本番の長時間推論では間隔を伸ばす運用も可。
+		refetchInterval: status === "実行中" ? 800 : false,
 	});
 
 	useEffect(() => {

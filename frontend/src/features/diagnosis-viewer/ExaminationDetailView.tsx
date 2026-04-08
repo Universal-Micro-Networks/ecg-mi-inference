@@ -1,11 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
-import { BackToListButton } from "./components/BackToListButton";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { EcgImagePanel } from "./components/EcgImagePanel";
 import { ExaminationInfoCard } from "./components/ExaminationInfoCard";
-import { InferenceResultPanel } from "./components/InferenceResultPanel";
+import { JudgmentModal } from "./components/JudgmentModal";
 import { PatientInfoCard } from "./components/PatientInfoCard";
 import "./diagnosis-viewer.css";
 import { apiFetch } from "../../lib/auth";
@@ -14,19 +12,36 @@ import { useEcgImage } from "./hooks/useEcgImage";
 import { useInference } from "./hooks/useInference";
 import type { InferenceDetail } from "./types";
 
-export const DiagnosisViewerPage = () => {
-	const { id } = useParams();
-	const examinationId = id ?? "";
+type Props = {
+	examinationId: string;
+};
+
+/** examinationId / キャッシュキーが変わるたびにフックをリセットし、読み込み中表示を一貫させる */
+function ExaminationEcgSection({
+	examinationId,
+	cacheKey,
+}: {
+	examinationId: string;
+	cacheKey: number;
+}) {
+	const { imageUrl, isLoading } = useEcgImage(examinationId, cacheKey);
+	return (
+		<EcgImagePanel
+			examinationId={examinationId}
+			cacheKey={cacheKey}
+			imageUrl={imageUrl}
+			isLoading={isLoading}
+		/>
+	);
+}
+
+export const ExaminationDetailView = ({ examinationId }: Props) => {
 	const queryClient = useQueryClient();
 	const { data, isLoading, isError, error, refetch } =
 		useDiagnosisDetail(examinationId);
 	const [ecgImageKey, setEcgImageKey] = useState(0);
-	const {
-		imageUrl,
-		isLoading: isImageLoading,
-		error: imageError,
-	} = useEcgImage(examinationId, ecgImageKey);
 	const [dialogOpen, setDialogOpen] = useState(false);
+	const [judgmentModalOpen, setJudgmentModalOpen] = useState(false);
 
 	const exportWaveMutation = useMutation({
 		mutationFn: async () => {
@@ -90,13 +105,15 @@ export const DiagnosisViewerPage = () => {
 	}
 
 	return (
-		<div className="viewer-page">
-			<header className="viewer-header">
-				<BackToListButton />
-				<h1>診察詳細</h1>
-			</header>
+		<div className="viewer-page viewer-page--embedded viewer-page--with-judgment-fab">
 			<PatientInfoCard patient={data.patient} />
+			<ExaminationEcgSection
+				key={`${examinationId}-${ecgImageKey}`}
+				examinationId={examinationId}
+				cacheKey={ecgImageKey}
+			/>
 			<ExaminationInfoCard
+				collapsible
 				examination={data}
 				onExportWaveCsv={() => exportWaveMutation.mutate()}
 				isExportingWave={exportWaveMutation.isPending}
@@ -106,21 +123,28 @@ export const DiagnosisViewerPage = () => {
 						: null
 				}
 			/>
-			<InferenceResultPanel
+			<button
+				type="button"
+				className="judgment-fab"
+				onClick={() => setJudgmentModalOpen(true)}
+			>
+				判定
+			</button>
+			<JudgmentModal
+				open={judgmentModalOpen}
+				onClose={() => setJudgmentModalOpen(false)}
+				examinationId={examinationId}
 				status={status}
 				inference={data.inference}
 				liveResult={result}
-				onRun={() => setDialogOpen(true)}
+				onRequestRun={() => setDialogOpen(true)}
 				isRunning={isRunning}
 				isSubmitting={isSubmitting}
-			/>
-			{inferenceError && (
-				<div className="state error">{(inferenceError as Error).message}</div>
-			)}
-			<EcgImagePanel
-				imageUrl={imageUrl}
-				isLoading={isImageLoading}
-				error={imageError}
+				error={
+					inferenceError
+						? String((inferenceError as Error).message || inferenceError)
+						: null
+				}
 			/>
 			<ConfirmDialog
 				open={dialogOpen}

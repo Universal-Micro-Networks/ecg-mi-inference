@@ -5,8 +5,7 @@ from datetime import datetime
 import pytest
 from fastapi.testclient import TestClient
 
-import app.api.auth as auth_api
-from app.auth_security import set_system_password_hash
+from app.auth_security import hash_password, set_system_password_hash
 from app.database import SessionLocal
 from app.main import app
 from app.models import Examination, Patient
@@ -67,15 +66,29 @@ def auth_headers(monkeypatch):
     monkeypatch.delenv("INITIAL_ADMIN_PASSWORD", raising=False)
     db = SessionLocal()
     try:
-        set_system_password_hash(db, "dummy-hash")
+        set_system_password_hash(db, hash_password("ValidPass1!"))
     finally:
         db.close()
-    monkeypatch.setattr(auth_api, "verify_password", lambda plain, _hash: plain == "ValidPass1!")
     with TestClient(app) as client:
         login = client.post("/api/auth/login", json={"password": "ValidPass1!"})
         assert login.status_code == 200
         token = login.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+def test_list_without_exam_date_returns_all_dates(auth_headers):
+    """exam_date 省略時は日付で絞らない（MFER 取り込みが別日付でも一覧に出せる）。"""
+    _seed_three_same_day()
+    try:
+        with TestClient(app) as client:
+            r = client.get("/api/examinations", headers=auth_headers)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["total"] >= 3
+        ids = {it["id"] for it in body["items"]}
+        assert len(ids) == len(body["items"])
+    finally:
+        _cleanup()
 
 
 def test_list_returns_items_and_total(auth_headers):

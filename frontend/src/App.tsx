@@ -2,7 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import { LoginPage, ProtectedRoute } from "./features/auth";
 import { DiagnosisListPage } from "./features/diagnosis-list";
-import { DiagnosisViewerPage } from "./features/diagnosis-viewer";
+import { DiagnosisLegacyRedirect } from "./features/diagnosis-viewer";
 
 const App = () => (
 	<Routes>
@@ -20,7 +20,7 @@ const App = () => (
 			path="/diagnoses/:id"
 			element={
 				<ProtectedRoute>
-					<DiagnosisViewerPage />
+					<DiagnosisLegacyRedirect />
 				</ProtectedRoute>
 			}
 		/>

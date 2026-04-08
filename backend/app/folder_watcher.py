@@ -16,6 +16,7 @@ from pathlib import Path
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer as WatchdogObserver
+from watchdog.observers.api import BaseObserver
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,49 @@ def _is_mfer_file(path: Path) -> bool:
     return path.suffix.lower() == ".mwf"
 
 
+def _normalize_absolute_watch_path(p: Path) -> Path:
+    """絶対パスを正規化。ネットワークドライブ等で resolve が失敗する場合は入力を優先する。"""
+    try:
+        return p.resolve(strict=False)
+    except (OSError, RuntimeError) as e:
+        logger.warning(
+            "MFER_WATCH_FOLDER の resolve に失敗したため指定どおり使用します: %s (%s)",
+            p,
+            e,
+        )
+        return p
+
+
+def _resolve_mfer_watch_folder(raw: str) -> Path:
+    """
+    MFER_WATCH_FOLDER を決定する。
+    - 絶対パス: `~` 展開後に resolve（失敗時は指定パスのまま）。UNC（Windows \\\\server\\share\\...）や
+      /Volumes/... のネットワークマウント、ドライブレター（D:\\...）を想定。
+    - 相対パス: まず cwd 基準。無ければリポジトリルート基準（docker-compose.yml がある階層）。
+      これにより `cd backend && uv run uvicorn` でも `develop/test_data` が使える。
+    """
+    s = raw.strip()
+    if not s:
+        return Path()
+    p = Path(s).expanduser()
+    if p.is_absolute():
+        return _normalize_absolute_watch_path(p)
+
+    cwd_hit = (Path.cwd() / p).resolve()
+    if cwd_hit.exists():
+        return cwd_hit
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    repo_root = backend_dir.parent
+    if (repo_root / "docker-compose.yml").is_file():
+        repo_hit = (repo_root / p).resolve()
+        if repo_hit.exists():
+            logger.info("MFER_WATCH_FOLDER resolved from repo root: %s -> %s", p, repo_hit)
+            return repo_hit
+
+    return cwd_hit
+
+
 @dataclass
 class WatcherStats:
     detected: int = 0
@@ -66,7 +110,7 @@ class _MferEventHandler(FileSystemEventHandler):
 
 class FolderWatcherService:
     def __init__(self, importer_func: Callable[[str], None]) -> None:
-        self.watch_folder = Path(os.getenv("MFER_WATCH_FOLDER", "")).expanduser()
+        self.watch_folder = _resolve_mfer_watch_folder(os.getenv("MFER_WATCH_FOLDER", ""))
         self.recursive = _env_bool("MFER_WATCH_RECURSIVE", True)
         self.max_concurrent = _env_int("MFER_MAX_CONCURRENT", 5)
         self.write_wait_interval = _env_int("MFER_WRITE_WAIT_INTERVAL", 2)
@@ -76,8 +120,7 @@ class FolderWatcherService:
         self.stats_interval = _env_int("MFER_STATS_INTERVAL", 300)
         self._importer_func = importer_func
 
-        # watchdog 型スタブ上 Observer が変数扱いになるため
-        self._observer: WatchdogObserver | None = None  # pyright: ignore[reportInvalidTypeForm]
+        self._observer: BaseObserver | None = None
         self._executor: ThreadPoolExecutor | None = None
         self._stats = WatcherStats()
         self._tracked: OrderedDict[str, float] = OrderedDict()
@@ -86,36 +129,113 @@ class FolderWatcherService:
         self._lock = threading.Lock()
         self._stop_stats = threading.Event()
         self._stats_thread: threading.Thread | None = None
+        self._bootstrap_stop = threading.Event()
+        self._bootstrap_thread: threading.Thread | None = None
+        self._observer_uses_polling = _env_bool("MFER_WATCH_USE_POLLING", False)
+
+    def _create_observer(self) -> BaseObserver:
+        """ネットワーク共有等で OS ネイティブ監視が不安定な場合は PollingObserver を選べる。"""
+        if self._observer_uses_polling:
+            from watchdog.observers.polling import PollingObserver
+
+            interval = float(_env_int("MFER_WATCH_POLLING_INTERVAL_SEC", 1))
+            logger.info(
+                "folder-watcher: MFER_WATCH_USE_POLLING=1 のため PollingObserver を使用します（interval=%ss）",
+                interval,
+            )
+            return PollingObserver(timeout=interval)
+        return WatchdogObserver()
 
     def start(self) -> None:
         if self._stats.started:
+            return
+        if self._bootstrap_thread and self._bootstrap_thread.is_alive():
             return
         if not self.watch_folder:
             logger.info("folder-watcher disabled: MFER_WATCH_FOLDER is empty")
             return
 
-        # If folder does not exist, poll until available.
-        while not self.watch_folder.exists():
-            logger.error("Watch folder not found: %s. waiting...", self.watch_folder)
-            time.sleep(2)
-
-        observer = WatchdogObserver()
-        executor = ThreadPoolExecutor(max_workers=self.max_concurrent)
-        self._observer = observer
-        self._executor = executor
-        handler = _MferEventHandler(self)
-        observer.schedule(handler, str(self.watch_folder), recursive=self.recursive)
-        observer.start()
-        self._stats.started = True
-        logger.info(
-            "folder-watcher started: folder=%s recursive=%s", self.watch_folder, self.recursive
+        # 監視パス待ちはメインスレッド（FastAPI lifespan）をブロックしないよう別スレッドで行う
+        self._bootstrap_stop.clear()
+        self._bootstrap_thread = threading.Thread(
+            target=self._bootstrap_and_watch,
+            name="folder-watcher-bootstrap",
+            daemon=True,
         )
+        self._bootstrap_thread.start()
 
-        self._stop_stats.clear()
-        self._stats_thread = threading.Thread(target=self._stats_loop, daemon=True)
-        self._stats_thread.start()
+    def _bootstrap_and_watch(self) -> None:
+        try:
+            while not self.watch_folder.exists():
+                logger.error("Watch folder not found: %s. waiting...", self.watch_folder)
+                if self._bootstrap_stop.wait(timeout=2):
+                    logger.info("folder-watcher bootstrap aborted before folder was available")
+                    return
+
+            if self._bootstrap_stop.is_set():
+                return
+
+            with self._lock:
+                if self._stats.started:
+                    return
+
+            if self._bootstrap_stop.is_set():
+                return
+
+            observer = self._create_observer()
+            executor = ThreadPoolExecutor(max_workers=self.max_concurrent)
+            if self._bootstrap_stop.is_set():
+                executor.shutdown(wait=False)
+                return
+
+            self._observer = observer
+            self._executor = executor
+            handler = _MferEventHandler(self)
+            observer.schedule(handler, str(self.watch_folder), recursive=self.recursive)
+            observer.start()
+
+            self._enqueue_pre_existing_mfer_files()
+
+            if self._bootstrap_stop.is_set():
+                observer.stop()
+                observer.join(timeout=self.shutdown_timeout)
+                executor.shutdown(wait=False)
+                self._observer = None
+                self._executor = None
+                return
+
+            self._stats.started = True
+            logger.info(
+                "folder-watcher started: folder=%s recursive=%s",
+                self.watch_folder,
+                self.recursive,
+            )
+
+            self._stop_stats.clear()
+            self._stats_thread = threading.Thread(target=self._stats_loop, daemon=True)
+            self._stats_thread.start()
+        except Exception:
+            logger.exception("folder-watcher bootstrap failed")
+
+    def _enqueue_pre_existing_mfer_files(self) -> None:
+        """起動時点で既に置いてある .mwf を取り込む（on_created は新規作成のみのため）。"""
+        if not self.watch_folder.is_dir():
+            return
+        if self.recursive:
+            candidates = self.watch_folder.rglob("*")
+        else:
+            candidates = self.watch_folder.iterdir()
+        for path in candidates:
+            if path.is_file() and _is_mfer_file(path):
+                logger.info("folder-watcher: enqueue pre-existing MFER %s", path.name)
+                self.enqueue_if_target(path)
 
     def stop(self) -> None:
+        self._bootstrap_stop.set()
+        if self._bootstrap_thread and self._bootstrap_thread.is_alive():
+            self._bootstrap_thread.join(timeout=5)
+        self._bootstrap_thread = None
+
         if self._stats.started:
             logger.info("folder-watcher stopping...")
         if self._observer and self._observer.is_alive():
@@ -136,6 +256,7 @@ class FolderWatcherService:
             self._executor = None
         self._observer = None
         self._stats.started = False
+        self._bootstrap_stop.clear()
         logger.info("folder-watcher stopped")
 
     def enqueue_if_target(self, path: Path) -> None:
@@ -224,8 +345,11 @@ class FolderWatcherService:
 
     def snapshot(self) -> dict:
         with self._lock:
+            boot = self._bootstrap_thread is not None and self._bootstrap_thread.is_alive()
             return {
                 "watching": self._stats.started,
+                "bootstrap_pending": boot and not self._stats.started,
+                "use_polling_observer": self._observer_uses_polling,
                 "folder": str(self.watch_folder),
                 "detected": self._stats.detected,
                 "success": self._stats.success,

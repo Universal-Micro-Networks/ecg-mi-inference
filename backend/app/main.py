@@ -3,12 +3,14 @@ ECG MI Inference Backend
 FastAPI application with examination and inference endpoints.
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from . import examination_events
 from .api.auth import router as auth_router
 from .api.examinations import router as examinations_router
 from .api.inferences import router as inferences_router
@@ -30,10 +32,12 @@ async def lifespan(_app: FastAPI):
         init_system_password_if_missing(db)
     finally:
         db.close()
+    examination_events.set_main_event_loop(asyncio.get_running_loop())
     watcher_service.start()
     try:
         yield
     finally:
+        examination_events.set_main_event_loop(None)
         watcher_service.stop()
 
 
@@ -69,6 +73,8 @@ app.include_router(inferences_router, prefix="/api", dependencies=[Depends(get_c
 def health_check():
     """Health check endpoint."""
     watcher = watcher_service.snapshot()
-    if watcher["watching"] or not watcher["folder"]:
+    # 監視フォルダ待ち（bootstrap スレッド）はプロセスは正常のため 200 とする
+    ok_watcher = watcher["watching"] or not watcher["folder"] or watcher.get("bootstrap_pending")
+    if ok_watcher:
         return {"status": "ok", "folder_watcher": watcher}
     return JSONResponse(status_code=503, content={"status": "degraded", "folder_watcher": watcher})

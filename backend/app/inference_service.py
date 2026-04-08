@@ -1,88 +1,98 @@
 """
 Inference service for managing MI detection inference execution.
 Handles status transitions and result storage.
+
+本番の推論ライブラリ接続前は、診察ごとに「推論を実行」するたび
+リスクあり（高）／リスクなし（低）が交互になるモックを返す。
 """
 
+from __future__ import annotations
+
 import json
-import random
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
+
+# 診察 ID ごとに実行回数を数え、奇数回目→陽性、偶数回目→陰性
+_examination_run_count: defaultdict[str, int] = defaultdict(int)
+
+# 推論完了までの待ち（秒）。UI で短い「実行中」を見せるため短めにする。
+_MOCK_COMPLETE_AFTER_SEC = 0.45
 
 
 class InferenceService:
     """Service for managing inference execution and status."""
 
-    # Simulated inference task tracking
     _running_tasks: dict[str, dict[str, Any]] = {}
 
     @staticmethod
     def start_inference(inference_id: str, examination_id: str) -> dict[str, Any]:
-        """
-        Start a new inference task.
+        _examination_run_count[examination_id] += 1
+        n = _examination_run_count[examination_id]
+        mock_positive = n % 2 == 1
 
-        Args:
-            inference_id: Unique inference ID
-            examination_id: Associated examination ID
-
-        Returns:
-            Dictionary with initial status
-        """
         InferenceService._running_tasks[inference_id] = {
             "status": "実行中",
             "started_at": datetime.utcnow().isoformat(),
             "progress": 0,
             "examination_id": examination_id,
+            "mock_positive": mock_positive,
         }
 
         return {"id": inference_id, "status": "実行中", "examination_id": examination_id}
 
     @staticmethod
     def get_inference_status(inference_id: str) -> dict[str, Any] | None:
-        """
-        Get current inference status.
-
-        Simulates inference completing after a few checks (3-5 checks = ~15-25 seconds).
-        """
         if inference_id not in InferenceService._running_tasks:
             return None
 
         task = InferenceService._running_tasks[inference_id]
-
-        # Simulate inference completion
-        # After 4-6 status checks (20-30 seconds), mark as complete
         started_at = datetime.fromisoformat(task["started_at"])
         elapsed_seconds = (datetime.utcnow() - started_at).total_seconds()
 
-        if elapsed_seconds > random.uniform(18, 25):
-            # Mark as complete
-            result = {
-                "mi_type": random.choice(["anterior", "inferior", "lateral", "posterior"]),
-                "severity": random.choice(["low", "moderate", "high"]),
-                "region": random.choice(["anterior_wall", "inferior_wall", "lateral_wall"]),
-                "timing": "acute",
-            }
-
-            return {
-                "id": inference_id,
-                "status": "完了",
-                "examination_id": task["examination_id"],
-                "result": json.dumps(result),
-                "confidence_score": round(random.uniform(0.75, 0.98), 3),
-                "mi_probability": round(random.uniform(0.65, 0.95), 3),
-                "completed_at": datetime.utcnow().isoformat(),
-            }
-        else:
-            # Still running
+        if elapsed_seconds < _MOCK_COMPLETE_AFTER_SEC:
             return {
                 "id": inference_id,
                 "status": "実行中",
                 "examination_id": task["examination_id"],
-                "progress": int((elapsed_seconds / random.uniform(20, 30)) * 100),
+                "progress": min(99, int((elapsed_seconds / _MOCK_COMPLETE_AFTER_SEC) * 100)),
             }
+
+        InferenceService._running_tasks.pop(inference_id, None)
+        examination_id = task["examination_id"]
+        positive = bool(task.get("mock_positive", True))
+
+        if positive:
+            risk_level = "高"
+            risk_score = 78
+            confidence_score = 0.91
+            mi_probability = 0.84
+        else:
+            risk_level = "低"
+            risk_score = 14
+            confidence_score = 0.88
+            mi_probability = 0.11
+
+        result_payload = {
+            "risk_level": risk_level,
+            "risk_score": risk_score,
+            "mock_alternating_demo": True,
+        }
+
+        return {
+            "id": inference_id,
+            "status": "完了",
+            "examination_id": examination_id,
+            "result": json.dumps(result_payload, ensure_ascii=False),
+            "confidence_score": confidence_score,
+            "mi_probability": mi_probability,
+            "completed_at": datetime.utcnow().isoformat(),
+            "risk_level": risk_level,
+            "risk_score": risk_score,
+        }
 
     @staticmethod
     def cancel_inference(inference_id: str) -> bool:
-        """Cancel a running inference task."""
         if inference_id in InferenceService._running_tasks:
             del InferenceService._running_tasks[inference_id]
             return True
@@ -99,41 +109,39 @@ class InferenceService:
         3. Run ML model to detect MI patterns
         4. Return confidence scores and classification
         """
-        # Simulate simple rule-based detection
-        has_st_elevation = random.random() > 0.6
-        has_t_inversion = random.random() > 0.5
-        qrs_duration = random.uniform(0.08, 0.12)
-
-        # Rule-based MI detection
-        mi_detected = has_st_elevation or (has_t_inversion and qrs_duration > 0.1)
-
-        if mi_detected:
-            mi_type = random.choice(["STEMI", "NSTEMI"])
-            severity = "high" if mi_type == "STEMI" else "moderate"
-            region = random.choice(["anterior", "inferior", "lateral"])
-            confidence = random.uniform(0.80, 0.98)
+        _examination_run_count[examination_id] += 1
+        positive = _examination_run_count[examination_id] % 2 == 1
+        if positive:
+            risk_level = "高"
+            risk_score = 72
+            mi_type = "STEMI"
+            severity = "high"
+            confidence = 0.87
+            mi_prob = 0.82
         else:
+            risk_level = "低"
+            risk_score = 18
             mi_type = "normal"
             severity = "low"
-            region = "none"
-            confidence = random.uniform(0.75, 0.95)
+            confidence = 0.86
+            mi_prob = 0.12
+
+        result_payload = {
+            "mi_type": mi_type,
+            "severity": severity,
+            "risk_level": risk_level,
+            "risk_score": risk_score,
+            "mock_alternating_demo": True,
+        }
 
         return {
             "status": "完了",
-            "result": json.dumps(
-                {
-                    "mi_type": mi_type,
-                    "severity": severity,
-                    "region": region,
-                    "st_elevation": has_st_elevation,
-                    "t_inversion": has_t_inversion,
-                    "qrs_duration": round(qrs_duration, 3),
-                }
-            ),
+            "result": json.dumps(result_payload, ensure_ascii=False),
             "confidence_score": round(confidence, 3),
-            "mi_probability": round(confidence if mi_detected else 0.1, 3),
+            "mi_probability": round(mi_prob, 3),
+            "risk_level": risk_level,
+            "risk_score": risk_score,
         }
 
 
-# Global inference service instance
 inference_service = InferenceService()

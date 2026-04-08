@@ -1,12 +1,12 @@
+import { formatDateTimeJa } from "../../../lib/datetime";
 import type { ExaminationSummary } from "../types";
 
 type Props = {
 	data: ExaminationSummary[];
-	selectedId: string | null;
 	sortBy: string;
 	sortOrder: string;
 	onSort: (column: string) => void;
-	onSelect: (id: string) => void;
+	onOpenDetail: (examinationId: string) => void;
 };
 
 const SortIndicator = ({
@@ -24,11 +24,10 @@ const SortIndicator = ({
 
 export const DiagnosisTable = ({
 	data,
-	selectedId,
 	sortBy,
 	sortOrder,
 	onSort,
-	onSelect,
+	onOpenDetail,
 }: Props) => (
 	<table className="diagnosis-table">
 		<thead>
@@ -66,58 +65,65 @@ export const DiagnosisTable = ({
 			</tr>
 		</thead>
 		<tbody>
-			{data.map((item) => (
-				<tr
-					key={item.id}
-					className={item.id === selectedId ? "selected" : undefined}
-				>
-					<td>
-						<button
-							type="button"
-							className="row-button"
-							onClick={() => onSelect(item.id)}
-						>
-							{item.exam_date}
-						</button>
-					</td>
-					<td>
-						<button
-							type="button"
-							className="row-button"
-							onClick={() => onSelect(item.id)}
-						>
-							{item.patient.name}
-						</button>
-					</td>
-					<td>
-						<button
-							type="button"
-							className="row-button"
-							onClick={() => onSelect(item.id)}
-						>
-							{item.patient.external_id}
-						</button>
-					</td>
-					<td>
-						<button
-							type="button"
-							className="row-button"
-							onClick={() => onSelect(item.id)}
-						>
-							{item.patient.age}
-						</button>
-					</td>
-					<td>
-						<button
-							type="button"
-							className="row-button"
-							onClick={() => onSelect(item.id)}
-						>
-							{item.patient.gender}
-						</button>
-					</td>
-				</tr>
-			))}
+			{data.map((item) => {
+				const rowLabel = `診察詳細: ${item.patient.name} ${formatDateTimeJa(
+					item.exam_date,
+				)}`;
+				return (
+					<tr key={item.id}>
+						<td>
+							<button
+								type="button"
+								className="diagnosis-row-link"
+								aria-label={rowLabel}
+								onClick={() => onOpenDetail(item.id)}
+							>
+								{formatDateTimeJa(item.exam_date)}
+							</button>
+						</td>
+						<td>
+							<button
+								type="button"
+								className="diagnosis-row-link"
+								aria-label={rowLabel}
+								onClick={() => onOpenDetail(item.id)}
+							>
+								{item.patient.name}
+							</button>
+						</td>
+						<td>
+							<button
+								type="button"
+								className="diagnosis-row-link"
+								aria-label={rowLabel}
+								onClick={() => onOpenDetail(item.id)}
+							>
+								{item.patient.external_id}
+							</button>
+						</td>
+						<td>
+							<button
+								type="button"
+								className="diagnosis-row-link"
+								aria-label={rowLabel}
+								onClick={() => onOpenDetail(item.id)}
+							>
+								{item.patient.age}
+							</button>
+						</td>
+						<td>
+							<button
+								type="button"
+								className="diagnosis-row-link"
+								aria-label={rowLabel}
+								onClick={() => onOpenDetail(item.id)}
+							>
+								{item.patient.gender}
+							</button>
+						</td>
+					</tr>
+				);
+			})}
 		</tbody>
 	</table>
 );

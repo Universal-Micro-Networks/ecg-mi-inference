@@ -1,3 +1,6 @@
+# リポジトリ直下の .env を読み込み:
+# - Compose ファイル内の ${VAR} 展開（プロジェクトディレクトリの .env が自動で対象）
+# - 各サービスの env_file によりコンテナ環境変数としても注入
 services:
   # Frontend service (Vite React development server)
   frontend:
@@ -7,9 +10,11 @@ services:
     container_name: ecg-mi-frontend
     ports:
       - "5173:5173"
+    env_file:
+      - .env
     environment:
-      - VITE_API_URL=http://localhost:8200/api
-      - VITE_PROXY_TARGET=http://backend:8000
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8200/api}
+      - VITE_PROXY_TARGET=${VITE_PROXY_TARGET:-http://backend:8000}
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
@@ -41,13 +46,19 @@ services:
     container_name: ecg-mi-backend
     ports:
       - "8200:8000"
+    env_file:
+      - .env
     environment:
+      # コンテナ内の SQLite パスは常にボリューム先に固定（ホスト .env の DATABASE_URL は上書き）
       - DATABASE_URL=sqlite:////app/data/ecg_mi.db
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD}
     volumes:
       - ./backend/app:/app/app
       - ./backend/data:/app/data
+      # file_importer の MFER_PROCESSED_FOLDER / MFER_ERROR_FOLDER 既定（/app/processed 等）とホストを同期
+      - ./backend/processed:/app/processed
+      - ./backend/error:/app/error
+      # MFER 監視用（.env の MFER_WATCH_FOLDER を /app/develop/... に合わせる）
+      - ./develop:/app/develop
     networks:
       - ecg-mi-network
     healthcheck:

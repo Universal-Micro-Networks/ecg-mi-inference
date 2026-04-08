@@ -2,13 +2,20 @@ import { useEffect, useState } from "react";
 
 import { apiFetch } from "../../../lib/auth";
 
+/**
+ * 心電図 PNG を取得する。404 / 422 / その他失敗時は imageUrl=null（パネルは空メッセージ表示）。
+ */
 export const useEcgImage = (examinationId: string, cacheKey = 0) => {
 	const [imageUrl, setImageUrl] = useState<string | null>(null);
-	const [isLoading, setIsLoading] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	const [isLoading, setIsLoading] = useState(true);
 
 	useEffect(() => {
 		if (!examinationId) {
+			setImageUrl((prev) => {
+				if (prev) URL.revokeObjectURL(prev);
+				return null;
+			});
+			setIsLoading(false);
 			return;
 		}
 
@@ -17,8 +24,6 @@ export const useEcgImage = (examinationId: string, cacheKey = 0) => {
 
 		const fetchImage = async () => {
 			try {
-				setIsLoading(true);
-				setError(null);
 				const qs = cacheKey ? `?v=${encodeURIComponent(String(cacheKey))}` : "";
 				const response = await apiFetch(
 					`/api/examinations/${examinationId}/ecg-image${qs}`,
@@ -27,16 +32,20 @@ export const useEcgImage = (examinationId: string, cacheKey = 0) => {
 					},
 				);
 
-				if (response.status === 404) {
+				if (response.status === 404 || response.status === 422) {
 					setImageUrl(null);
 					return;
 				}
 
 				if (!response.ok) {
-					throw new Error("心電図画像の取得に失敗しました");
+					setImageUrl(null);
+					return;
 				}
 
 				const blob = await response.blob();
+				if (controller.signal.aborted) {
+					return;
+				}
 				objectUrl = URL.createObjectURL(blob);
 				setImageUrl(objectUrl);
 			} catch (fetchError) {
@@ -46,12 +55,19 @@ export const useEcgImage = (examinationId: string, cacheKey = 0) => {
 				) {
 					return;
 				}
-				setError("心電図画像の取得に失敗しました");
+				setImageUrl(null);
 			} finally {
-				setIsLoading(false);
+				if (!controller.signal.aborted) {
+					setIsLoading(false);
+				}
 			}
 		};
 
+		setImageUrl((prev) => {
+			if (prev) URL.revokeObjectURL(prev);
+			return null;
+		});
+		setIsLoading(true);
 		fetchImage();
 
 		return () => {
@@ -62,5 +78,5 @@ export const useEcgImage = (examinationId: string, cacheKey = 0) => {
 		};
 	}, [examinationId, cacheKey]);
 
-	return { imageUrl, isLoading, error };
+	return { imageUrl, isLoading };
 };

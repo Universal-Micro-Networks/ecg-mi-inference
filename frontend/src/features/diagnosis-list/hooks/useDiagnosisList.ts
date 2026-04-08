@@ -22,12 +22,14 @@ const fetchExaminations = async ({
 	offset,
 }: Params) => {
 	const params = new URLSearchParams({
-		exam_date: examDate,
 		sort_by: sortBy,
 		sort_order: sortOrder,
 		limit: String(limit),
 		offset: String(offset),
 	});
+	if (examDate.trim()) {
+		params.set("exam_date", examDate.trim());
+	}
 	const id = patientId.trim();
 	const name = patientName.trim();
 	if (id) {

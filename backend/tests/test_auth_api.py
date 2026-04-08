@@ -1,7 +1,6 @@
 from fastapi.testclient import TestClient
 
-import app.api.auth as auth_api
-from app.auth_security import set_system_password_hash
+from app.auth_security import hash_password, set_system_password_hash
 from app.database import SessionLocal
 from app.main import app
 
@@ -12,12 +11,9 @@ def test_login_success_and_failure(monkeypatch):
 
     db = SessionLocal()
     try:
-        # Startup hash generationを避けるため、先に存在だけ作る
-        set_system_password_hash(db, "dummy-hash")
+        set_system_password_hash(db, hash_password("ValidPass1!"))
     finally:
         db.close()
-
-    monkeypatch.setattr(auth_api, "verify_password", lambda plain, _hash: plain == "ValidPass1!")
 
     with TestClient(app) as client:
         fail = client.post("/api/auth/login", json={"password": "wrong"})
@@ -36,11 +32,9 @@ def test_protected_route_requires_auth_and_logout_invalidates_token(monkeypatch)
 
     db = SessionLocal()
     try:
-        set_system_password_hash(db, "dummy-hash")
+        set_system_password_hash(db, hash_password("ValidPass1!"))
     finally:
         db.close()
-
-    monkeypatch.setattr(auth_api, "verify_password", lambda plain, _hash: plain == "ValidPass1!")
 
     with TestClient(app) as client:
         no_auth = client.get("/api/examinations", params={"exam_date": "2026-03-09"})

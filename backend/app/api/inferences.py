@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..inference_payload import inference_row_to_client_dict, strip_none
 from ..inference_service import inference_service
 from ..models import Examination, Inference
 
@@ -36,6 +37,19 @@ class InferenceResponse(BaseModel):
     updated_at: str | None = None
 
 
+def _get_inference_by_path_id(db: Session, inference_or_exam_id: str) -> Inference | None:
+    """パスが推論 UUID のときはその行。見つからなければ診察 UUID とみなし最新推論を返す（フロント互換）。"""
+    row = db.query(Inference).filter(Inference.id == inference_or_exam_id).first()
+    if row:
+        return row
+    return (
+        db.query(Inference)
+        .filter(Inference.examination_id == inference_or_exam_id)
+        .order_by(Inference.created_at.desc())
+        .first()
+    )
+
+
 @router.post("/inferences")
 def run_inference(
     payload: InferenceRequest,
@@ -46,18 +60,15 @@ def run_inference(
 
     Returns immediately with status "実行中". Client should poll the status endpoint.
     """
-    # Get examination
     exam = db.query(Examination).filter(Examination.id == payload.examination_id).first()
     if not exam:
         raise HTTPException(status_code=404, detail="Examination not found")
 
-    # Create new inference record
     inference = Inference(examination_id=payload.examination_id, status="実行中")
     db.add(inference)
     db.commit()
     db.refresh(inference)
 
-    # Start inference task
     inference_service.start_inference(inference.id, payload.examination_id)
 
     return {
@@ -76,42 +87,28 @@ def get_inference_status(
     """
     Get inference status and results.
 
+    `inference_id` は推論レコードの UUID、または診察 UUID（その場合は最新の推論）を受け付ける。
+
     Statuses:
     - 未実行: Not started
     - 実行中: Running
     - 完了: Completed successfully
     - エラー: Failed with error
     """
-    # Get from database
-    inference = db.query(Inference).filter(Inference.id == inference_id).first()
+    inference = _get_inference_by_path_id(db, inference_id)
     if not inference:
         raise HTTPException(status_code=404, detail="Inference not found")
 
-    # Get status from service (for running tasks)
     if inference.status == "実行中":
-        service_status = inference_service.get_inference_status(inference_id)
+        service_status = inference_service.get_inference_status(inference.id)
 
         if service_status and service_status.get("status") == "完了":
-            # Update database with result
             inference.status = "完了"
             inference.result = service_status.get("result")
             inference.confidence_score = service_status.get("confidence_score")
             inference.mi_probability = service_status.get("mi_probability")
             inference.updated_at = datetime.utcnow()
             db.commit()
+            db.refresh(inference)
 
-    # Return current status
-    result = {
-        "id": inference.id,
-        "examination_id": inference.examination_id,
-        "status": inference.status,
-        "result": inference.result,
-        "error_message": inference.error_message,
-        "confidence_score": inference.confidence_score,
-        "mi_probability": inference.mi_probability,
-        "created_at": inference.created_at.isoformat(),
-        "updated_at": inference.updated_at.isoformat(),
-    }
-
-    # Remove None values
-    return {k: v for k, v in result.items() if v is not None}
+    return strip_none(inference_row_to_client_dict(inference))

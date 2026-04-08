@@ -1,0 +1,12 @@
+# バックエンドの mfer-tools を、ビルド時に git+ssh で取得する（非公開リポジトリ向け）
+# 使い方: DOCKER_BUILDKIT=1 docker compose -f docker-compose.yml -f docker-compose.ssh.yml build backend
+# または make build-ssh / make dev-ssh
+#
+# 事前に GitHub へ SSH 接続できること（ssh -T git@github.com）
+services:
+  backend:
+    build:
+      args:
+        MFER_TOOLS_INSTALL: ssh
+      ssh:
+        - default

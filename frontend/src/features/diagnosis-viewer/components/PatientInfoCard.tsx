@@ -6,8 +6,7 @@ type Props = {
 
 export const PatientInfoCard = ({ patient }: Props) => (
 	<section className="card">
-		<h2>患者情報</h2>
-		<div className="card-grid">
+		<div className="patient-info-row">
 			<div>
 				<span className="label">氏名</span>
 				<span>{patient.name}</span>

@@ -14,6 +14,8 @@ dependencies = [
     "python-dateutil>=2.9.0",
     "python-jose>=3.4.0",
     "passlib[bcrypt]>=1.7.4",
+    # passlib 1.7.x は bcrypt 4.1+ の API 変更と非互換（__about__ 削除等）
+    "bcrypt>=4.0.1,<4.1.0",
     "watchdog>=6.0.0",
     "mfer-tools @ git+https://github.com/tkwataru/mfer-tools.git",
 ]
@@ -30,7 +32,7 @@ dev-dependencies = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-exclude = [".venv", "data", "**/__pycache__"]
+exclude = [".venv", "data", "vendor", "**/__pycache__", "vendor/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

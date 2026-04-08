@@ -1,1 +1,2 @@
-export { DiagnosisViewerPage } from "./DiagnosisViewerPage";
+export { DiagnosisLegacyRedirect } from "./DiagnosisLegacyRedirect";
+export { ExaminationDetailView } from "./ExaminationDetailView";

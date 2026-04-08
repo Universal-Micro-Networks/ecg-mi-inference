@@ -41,11 +41,17 @@
 #### 受け入れ基準
 
 1. When MFERファイルを解析する, file-importer shall MFER形式のバイナリデータから患者属性をパースする
-2. file-importer shall 以下の患者情報を抽出する：患者ID、氏名、生年月日、性別
-3. file-importer shall 以下の診察メタデータを抽出する：検査日時、検査種別
-4. file-importer shall 心電図波形データは読み込まない（スキップする）
-5. If MFERファイルの形式が不正な場合, then file-importer shall パースエラーを返す
-6. If 必須項目（患者ID、検査日時）が欠落している場合, then file-importer shall バリデーションエラーを返す
+2. file-importer shall **MFER ヘッダ**（`extract_mfer_header` が返すキー）を**付帯 XML より優先**して読み取り、次の対応で患者・診察メタを構成する：
+   - `MWF_PNM` … 患者名
+   - `MWF_PID` … 患者 ID（外部 ID）
+   - `MWF_AGE` … 生年月日または年齢（設計書の解釈規則に従い、DB の患者年齢フィールドに反映する）
+   - `MWF_SEX` … 性別（設計書の正規化規則に従う）
+   - `MWF_TIM` … 測定時刻（検査日時）
+3. file-importer shall ヘッダで取得できない項目は、付帯 XML（HL7 互換）から補完する（患者名・患者 ID・検査日時・性別など）
+4. file-importer shall 以下の診察メタデータを抽出する：検査日時、検査種別（検査種別は主に XML 由来でよい）
+5. file-importer shall 心電図波形データは読み込まない（スキップする）
+6. If MFERファイルの形式が不正な場合, then file-importer shall パースエラーを返す
+7. If 必須項目（患者ID、検査日時）が欠落している場合, then file-importer shall バリデーションエラーを返す
 
 ### 要件3: 患者データの登録
 
@@ -193,11 +199,11 @@
 | カラム | 型 | 説明 |
 |--------|------|------|
 | id | UUID | システム内部ID（PK） |
-| external_id | VARCHAR | MFERファイル内の患者ID |
+| patient_id | VARCHAR | MFERファイル内の患者ID（外部ID、ユニーク） |
 | name | VARCHAR | 患者氏名 |
-| birth_date | DATE | 生年月日 |
-| gender | VARCHAR | 性別 |
-| created_at | TIMESTAMP | 登録日時 |
+| age | INTEGER (nullable) | 年齢（`MWF_AGE` から数値または生年月日＋検査日時で算出。未取得時は null） |
+| gender | VARCHAR (nullable) | 性別（`MWF_SEX` または XML の `M/F` 等から正規化したラベル） |
+| created_at / updated_at | TIMESTAMP | 登録・更新日時 |
 
 ### 診察テーブル (examinations)
 
@@ -301,4 +307,4 @@ flowchart TD
 
 **ステータス:** レビュー待ち
 **作成日:** 2025-12-07
-**最終更新:** 2025-12-07
+**最終更新:** 2026-04-08（MFER ヘッダキー優先・患者 age の反映）

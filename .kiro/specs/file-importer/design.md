@@ -51,11 +51,13 @@ header = extract_mfer_header("data/sample.MWF")
 exam_time = header.get("MWF_TIM")
 ```
 
-- 期待マッピング（初版）:
-  - `MWF_TIM` -> 検査日時
-  - `MWF_PID`（存在する場合） -> 患者ID
-  - `MWF_PNM`（存在する場合） -> 患者名
-  - 未取得時は XML 補完へフォールバック
+- **ヘッダ優先マッピング**（付帯 XML より先に適用）:
+  - `MWF_PNM` → 患者名
+  - `MWF_PID` → 患者 ID（外部 ID）
+  - `MWF_TIM` → 測定時刻（検査日時。既存の `_parse_exam_datetime` で正規化）
+  - `MWF_SEX` → 性別（`M`/`F`、`1`/`2`、`男`/`女`、`男性`/`女性` 等を `男性`/`女性` に正規化。ヘッダが無い・解釈不能時は XML の `administrativeGenderCode@code` を従来どおり `M/F` → ラベルへ）
+  - `MWF_AGE` → 年齢（整数）として DB `patients.age` に格納。解釈規則の例: 8 桁数字は `YYYYMMDD` の生年月日とみなし検査日時から年齢を算出；0〜150 の整数文字列はそのまま年齢；`YYYY-MM-DD` / `YYYY/MM/DD` 等も生年月日として扱い得る。パース不能時は null（XML からの年齢補完は現状必須としない）
+  - 上記いずれも空白のみは未設定とみなし、XML 側の対応項目へフォールバックする（患者 ID・検査日時が最終的に欠く場合はバリデーションエラー／合成 ID ルールは既存どおり）
 
 ### 3. XML Fallback Parser
 
@@ -98,10 +100,14 @@ exam_time = header.get("MWF_TIM")
 
 - 単体:
   - 拡張子判定（`.mwf/.MWF`）
-  - ヘッダ抽出マッピング
+  - ヘッダ抽出マッピング（`MWF_PNM` / `MWF_PID` / `MWF_TIM` / `MWF_SEX` / `MWF_AGE` の優先と正規化・年齢パース）
   - XMLフォールバック抽出
   - 重複判定
 - 統合:
   - sample_data の AKASHI MWF/XML で患者・診察登録
   - 同一ファイル再投入で重複スキップ
   - 不正ファイルで error への振り分け
+
+---
+
+**最終更新:** 2026-04-08（MFER ヘッダ五キー優先・`MWF_AGE`/`MWF_SEX`・患者 age）

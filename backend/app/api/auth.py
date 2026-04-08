@@ -8,6 +8,7 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from passlib.exc import UnknownHashError
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -61,7 +62,11 @@ class MessageResponse(BaseModel):
 @router.post("/auth/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     password_hash = get_system_password_hash(db)
-    if not password_hash or not verify_password(payload.password, password_hash):
+    try:
+        ok = bool(password_hash and verify_password(payload.password, password_hash))
+    except UnknownHashError:
+        ok = False
+    if not ok:
         logger.info("login_failed: invalid_password")
         raise HTTPException(status_code=401, detail="パスワードが正しくありません")
 

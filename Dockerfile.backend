@@ -1,15 +1,22 @@
-# Backend Dockerfile
-FROM python:3.13-slim
+# syntax=docker/dockerfile:1
+# mfer-tools: MFER_TOOLS_INSTALL=vendor（既定）または ssh（BuildKit + ホストの SSH 鍵）
+ARG MFER_TOOLS_INSTALL=vendor
+ARG MFER_TOOLS_COMMIT=1012d5ce92ea3279eab975716d6314c8708894b2
+
+FROM python:3.13-slim AS base
 
 WORKDIR /app
 
-# Install system dependencies
+# curl: Compose healthcheck。libsndfile1: librosa / soundfile 周りでよく必要
 RUN apt-get update && apt-get install -y \
     build-essential \
+    curl \
+    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# bcrypt 4.1+ は passlib 1.7.x と非互換のため上限を固定（mfer-tools は各ステージで追加）
 RUN pip install --no-cache-dir \
+    "bcrypt>=4.0.1,<4.1.0" \
     fastapi \
     uvicorn[standard] \
     sqlalchemy \
@@ -21,11 +28,31 @@ RUN pip install --no-cache-dir \
     passlib[bcrypt] \
     watchdog
 
-# Copy application code
+FROM base AS mfer-vendor
+# 非公開リポジトリで SSH ビルドを使わない場合: ホストで make vendor-mfer-tools 済みであること
+COPY backend/vendor/mfer-tools /tmp/mfer-tools
+RUN test -f /tmp/mfer-tools/pyproject.toml || ( \
+    echo "ERROR: backend/vendor/mfer-tools に mfer-tools が無いです。make vendor-mfer-tools を実行するか、MFER_TOOLS_INSTALL=ssh でビルドしてください（backend/vendor/README.md）。" >&2; \
+    exit 1 \
+    )
+RUN pip install --no-cache-dir /tmp/mfer-tools
+
+FROM base AS mfer-ssh
+# pip の VCS 取得に git、認証に openssh（BuildKit --ssh でエージェント/鍵を渡す）
+RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p -m 0700 /root/.ssh \
+    && ssh-keyscan -t ed25519,rsa github.com >> /root/.ssh/known_hosts 2>/dev/null || true
+ARG MFER_TOOLS_COMMIT
+RUN --mount=type=ssh \
+    pip install --no-cache-dir \
+    "mfer-tools @ git+ssh://git@github.com/tkwataru/mfer-tools.git@${MFTER_TOOLS_COMMIT}"
+
+ARG MFER_TOOLS_INSTALL
+FROM mfer-${MFER_TOOLS_INSTALL} AS runtime
+
 COPY backend/app ./app
 
-# Expose port
 EXPOSE 8000
 
-# Start uvicorn server
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

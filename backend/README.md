@@ -143,8 +143,9 @@ backend/
 - `GET /api/examinations/{examination_id}` - Get examination detail（`mfer_file_path` / `csv_file_path` / `created_at` など）
 - `POST /api/examinations/{examination_id}/export-wave-csv` - MFER を再読込し `mfer_tools.extract_mfer_data` + `save_wave_csv` で波形 CSV を `data/waves/{id}.csv` に出力し、`csv_file_path` を更新
 
-- `GET /api/examinations/{examination_id}/ecg-image` - Get ECG image as PNG
-  - Returns ETag headers for caching
+- `GET /api/examinations/{examination_id}/ecg-image` - 心電図 PNG（matplotlib 12 誘導）
+  - 取得前に `data/waves/{id}.csv` を優先し、無ければ MFER から `extract_mfer_data` + `save_wave_csv` で自動出力してから、その CSV を入力に画像生成する（`csv_file_path` を同期する場合あり）
+  - `If-None-Match` が DB の ETag と一致すれば 304（本文・再エクスポートなし）
 
 ### Inferences
 
@@ -175,7 +176,9 @@ backend/
 |---|---|---|---|
 | `MFER_PROCESSED_FOLDER` | - | `./processed` | 正常処理ファイルの移動先 |
 | `MFER_ERROR_FOLDER` | - | `./error` | エラーファイルの移動先 |
-| `MFER_WATCH_FOLDER` | folder-watcher側で必須 | - | 監視対象フォルダ |
+| `MFER_WATCH_FOLDER` | folder-watcher側で必須 | - | 監視対象フォルダ（相対・絶対、`~` 可） |
+| `MFER_WATCH_USE_POLLING` | - | `false` | ネットワーク共有向けに PollingObserver を使う |
+| `MFER_WATCH_POLLING_INTERVAL_SEC` | - | `1` | ポーリング間隔（秒） |
 
 ## Database
 
@@ -190,10 +193,13 @@ Database is auto-initialized on startup with sample data.
 ## ECG Image Generation
 
 ECG images are generated on-demand from CSV files using matplotlib:
-- Reads signal data from CSV
-- Generates 12-lead ECG visualization
-- Caches PNG on disk with ETag support
-- Falls back to synthetic ECG for demo if CSV not found
+
+- Reads `time` plus standard lead columns (`I`, `II`, `III`, `aVR`, `aVL`, `aVF`, `V1`–`V6`) when present (same shape as `mfer_tools.save_wave_csv` output).
+- Renders a **single PNG** with a **6×2 grid** of subplots. Missing leads show a placeholder in their cell.
+- Legacy CSV with only one numeric column is plotted as **lead II**; other cells stay empty.
+- Title includes sampling rate (Hz); rate is inferred from the `time` column when available, otherwise 250 Hz is assumed.
+- Caches PNG under `data/ecg_cache/` with a versioned cache key; ETag support unchanged.
+- If the CSV is missing, unreadable, or has no usable lead data, `generate_ecg_image` raises **`EcgWaveformLoadError`** (no synthetic / demo waveform). The `ecg-image` API responds with **422** and a Japanese error detail.
 
 ## Inference Simulation
 

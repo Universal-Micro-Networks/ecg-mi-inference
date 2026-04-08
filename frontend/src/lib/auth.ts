@@ -26,6 +26,18 @@ export const clearTokens = () => {
 	localStorage.removeItem("auth_token");
 };
 
+/** 認証切れ時にログインへ。React Router 外からでも確実に遷移する。 */
+export function redirectToLogin(): void {
+	if (typeof window === "undefined") {
+		return;
+	}
+	const path = window.location.pathname;
+	if (path === "/login" || path.startsWith("/login/")) {
+		return;
+	}
+	window.location.replace(`${window.location.origin}/login`);
+}
+
 const parseJwtPayload = (token: string): { exp?: number } | null => {
 	const parts = token.split(".");
 	if (parts.length < 2) {
@@ -109,12 +121,72 @@ export const apiFetch = async (
 	if (!isAuthEndpoint && response.status === 401) {
 		const refreshed = await refreshAccessToken();
 		if (!refreshed) {
+			clearTokens();
+			redirectToLogin();
 			return response;
 		}
 		response = await fetch(input, {
 			...init,
 			headers: buildHeaders(init?.headers, refreshed),
 		});
+		if (response.status === 401) {
+			clearTokens();
+			redirectToLogin();
+		}
+	}
+
+	return response;
+};
+
+const buildStreamRequestHeaders = (
+	headers: HeadersInit | undefined,
+	token: string | null,
+): Record<string, string> => {
+	const base = new Headers(headers);
+	if (token) {
+		base.set("Authorization", `Bearer ${token}`);
+	}
+	base.set("Accept", "text/event-stream");
+	return Object.fromEntries(base.entries());
+};
+
+/**
+ * SSE など本文を長く読む GET 用。Content-Type: application/json は付けない。
+ */
+export const apiFetchStream = async (
+	input: string | URL,
+	init?: RequestInit,
+): Promise<Response> => {
+	const url = typeof input === "string" ? input : input.toString();
+	const isAuthEndpoint = url.startsWith("/api/auth/");
+	let token = getAccessToken();
+
+	if (!isAuthEndpoint && token && shouldRefreshSoon(token)) {
+		token = await refreshAccessToken();
+	}
+
+	let response = await fetch(url, {
+		...init,
+		method: init?.method ?? "GET",
+		headers: buildStreamRequestHeaders(init?.headers, token),
+	});
+
+	if (!isAuthEndpoint && response.status === 401) {
+		const refreshed = await refreshAccessToken();
+		if (!refreshed) {
+			clearTokens();
+			redirectToLogin();
+			return response;
+		}
+		response = await fetch(url, {
+			...init,
+			method: init?.method ?? "GET",
+			headers: buildStreamRequestHeaders(init?.headers, refreshed),
+		});
+		if (response.status === 401) {
+			clearTokens();
+			redirectToLogin();
+		}
 	}
 
 	return response;

@@ -135,15 +135,19 @@ docker-compose down
 
 **Environment Variables**:
 - `DATABASE_URL` - SQLite database path (default: `sqlite:////app/data/ecg_mi.db`)
-- `MFER_WATCH_FOLDER` - folder-watcher の監視対象フォルダ
+- `MFER_WATCH_FOLDER` - folder-watcher の監視対象フォルダ（相対・絶対どちらも可。Compose 例: `/app/develop/test_data`。ホストのネットワーク共有をマウントしたパスも可）
+- `MFER_WATCH_USE_POLLING` - `1` 等で PollingObserver（SMB/NFS 等でネイティブ監視が弱いとき向け）
+- `MFER_WATCH_POLLING_INTERVAL_SEC` - ポーリング間隔（秒、既定 1）
 - `MFER_PROCESSED_FOLDER` - file-importer 成功時の移動先（default: `./processed`）
 - `MFER_ERROR_FOLDER` - file-importer 失敗時の移動先（default: `./error`）
 - `JWT_SECRET_KEY` - 認可トークン署名用シークレット（必須）
-- `INITIAL_ADMIN_PASSWORD` - 初回起動時の認可パスワード
+- `INITIAL_ADMIN_PASSWORD` - 初回起動時（または DB に bcrypt が無いとき）の管理者パスワード。既存 DB では `.env` を変えてもログインは変わらない
+- `RESYNC_INITIAL_ADMIN_PASSWORD` - `1` 等で有効化すると、起動時に `INITIAL_ADMIN_PASSWORD` で上書き（開発用）
 
 **Volume Mounts**:
 - `./backend/app` - Python application code
 - `./backend/data` - Database and cache files
+- `./develop` - `develop/test_data` 等を MFER 監視に使う場合（`/app/develop`）
 
 **Health Check**: curl test on `/health` endpoint every 30 seconds
 

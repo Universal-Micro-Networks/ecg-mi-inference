@@ -1,4 +1,11 @@
-.PHONY: help build up down logs clean dev reset lint test
+.PHONY: help build build-ssh up down logs clean dev dev-ssh reset lint test db-clear-clinical vendor-mfer-tools
+
+# Compose v2 推奨（build.ssh は v2 系）。未インストールなら Docker Desktop の CLI を確認してください。
+DOCKER_COMPOSE ?= docker compose
+
+# Docker 用: 非公開 mfer-tools をホストで取得（コミット対象外）
+MFER_TOOLS_GIT_URL ?= https://github.com/tkwataru/mfer-tools.git
+MFER_TOOLS_COMMIT ?= 1012d5ce92ea3279eab975716d6314c8708894b2
 
 # Color output
 BLUE := \033[0;34m
@@ -19,15 +26,45 @@ help: ## Show this help message
 	@echo "  make logs             # View service logs"
 	@echo "  make reset            # Reset database and start fresh"
 	@echo "  make clean            # Remove all containers and volumes"
+	@echo "  make dev-ssh          # dev と同様 + バックエンド mfer-tools を SSH でビルド"
+
+vendor-mfer-tools: ## Clone mfer-tools into backend/vendor (needed before docker build; use SSH URL if private)
+	@if [ -f backend/vendor/mfer-tools/pyproject.toml ]; then \
+		echo "$(GREEN)mfer-tools は既に backend/vendor/mfer-tools にあります$(NC)"; \
+	else \
+		rm -rf backend/vendor/mfer-tools && \
+		mkdir -p backend/vendor && \
+		git clone "$(MFER_TOOLS_GIT_URL)" backend/vendor/mfer-tools && \
+		git -C backend/vendor/mfer-tools checkout "$(MFER_TOOLS_COMMIT)" && \
+		echo "$(GREEN)backend/vendor/mfer-tools を取得しました（commit $(MFER_TOOLS_COMMIT)）$(NC)"; \
+	fi
 
 # Development commands
 dev: ## Start development environment with hot reload
+	@test -f backend/vendor/mfer-tools/pyproject.toml || ( \
+		echo "$(YELLOW)先に mfer-tools を取得してください: make vendor-mfer-tools$(NC)"; \
+		exit 1; \
+	)
 	@echo "$(BLUE)Starting development environment...$(NC)"
 	docker-compose up --build
 
+dev-ssh: ## dev と同様だがバックエンドは SSH で mfer-tools をインストール（vendor 不要）
+	DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 $(DOCKER_COMPOSE) \
+		-f docker-compose.yml -f docker-compose.ssh.yml up --build
+
 build: ## Build all Docker images
+	@test -f backend/vendor/mfer-tools/pyproject.toml || ( \
+		echo "$(YELLOW)先に mfer-tools を取得してください: make vendor-mfer-tools$(NC)"; \
+		echo "$(YELLOW)（手順: backend/vendor/README.md）$(NC)"; \
+		exit 1; \
+	)
 	@echo "$(BLUE)Building Docker images...$(NC)"
 	docker-compose build --no-cache
+
+build-ssh: ## Build images; mfer-tools を BuildKit SSH（git@github.com）で取得（vendor 不要）
+	@echo "$(BLUE)Building Docker images (backend mfer-tools via SSH)...$(NC)"
+	DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 $(DOCKER_COMPOSE) \
+		-f docker-compose.yml -f docker-compose.ssh.yml build --no-cache
 
 up: ## Start all services
 	@echo "$(BLUE)Starting services...$(NC)"
@@ -90,6 +127,20 @@ db-reset: ## Reset database and reinitialize with sample data
 
 db-shell: ## Open SQLite shell
 	sqlite3 backend/data/ecg_mi.db
+
+# 診断=inferences、診察=examinations、患者=patients（system_config / token_blacklist は残す）
+db-clear-clinical: ## Delete all patient, examination, and inference records from SQLite
+	@if [ ! -f backend/data/ecg_mi.db ]; then \
+		echo "$(YELLOW)No database at backend/data/ecg_mi.db — nothing to do.$(NC)"; \
+		exit 0; \
+	fi
+	@echo "$(YELLOW)Deleting inferences, examinations, and patients...$(NC)"
+	sqlite3 backend/data/ecg_mi.db "PRAGMA foreign_keys = ON; \
+		DELETE FROM inferences; \
+		DELETE FROM examinations; \
+		DELETE FROM patients; \
+		VACUUM;"
+	@echo "$(GREEN)Clinical records cleared (patients, examinations, inferences).$(NC)"
 
 # Testing and quality
 test-backend: ## Run backend tests

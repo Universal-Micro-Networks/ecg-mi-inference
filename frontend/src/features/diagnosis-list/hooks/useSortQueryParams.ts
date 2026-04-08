@@ -1,15 +1,12 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
-const formatDate = (date: Date) => {
-	const year = date.getFullYear();
-	const month = String(date.getMonth() + 1).padStart(2, "0");
-	const day = String(date.getDate()).padStart(2, "0");
-	return `${year}-${month}-${day}`;
-};
+const DEFAULT_PAGE_SIZE = 20;
 
 const clampLimit = (n: number) =>
-	Number.isFinite(n) ? Math.min(500, Math.max(1, Math.floor(n))) : 50;
+	Number.isFinite(n)
+		? Math.min(500, Math.max(1, Math.floor(n)))
+		: DEFAULT_PAGE_SIZE;
 
 const clampOffset = (n: number) =>
 	Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
@@ -25,7 +22,10 @@ export const useSortQueryParams = () => {
 	const sortOrder = searchParams.get("sort_order") ?? "desc";
 
 	const limit = useMemo(() => {
-		const raw = Number.parseInt(searchParams.get("limit") ?? "50", 10);
+		const raw = Number.parseInt(
+			searchParams.get("limit") ?? String(DEFAULT_PAGE_SIZE),
+			10,
+		);
 		return clampLimit(raw);
 	}, [searchParams]);
 
@@ -34,17 +34,13 @@ export const useSortQueryParams = () => {
 		return clampOffset(raw);
 	}, [searchParams]);
 
-	useEffect(() => {
-		if (!examDate) {
-			const next = new URLSearchParams(searchParams);
-			next.set("exam_date", formatDate(new Date()));
-			setSearchParams(next, { replace: true });
-		}
-	}, [examDate, searchParams, setSearchParams]);
-
 	const setExamDate = (value: string) => {
 		const next = new URLSearchParams(searchParams);
-		next.set("exam_date", value);
+		if (!value) {
+			next.delete("exam_date");
+		} else {
+			next.set("exam_date", value);
+		}
 		next.set("offset", "0");
 		setSearchParams(next);
 	};
@@ -85,7 +81,7 @@ export const useSortQueryParams = () => {
 	);
 
 	return {
-		examDate: examDate || formatDate(new Date()),
+		examDate,
 		sortBy,
 		sortOrder,
 		limit,
