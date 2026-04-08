@@ -68,6 +68,10 @@ web_modules/
 # dotenv environment variable files
 .env
 
+# macOS
+.DS_Store
+**/.DS_Store
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
