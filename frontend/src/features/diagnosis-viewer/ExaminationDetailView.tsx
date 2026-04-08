@@ -134,6 +134,7 @@ export const ExaminationDetailView = ({ examinationId }: Props) => {
 				open={judgmentModalOpen}
 				onClose={() => setJudgmentModalOpen(false)}
 				examinationId={examinationId}
+				patientExternalId={data.patient.external_id}
 				status={status}
 				inference={data.inference}
 				liveResult={result}

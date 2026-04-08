@@ -268,21 +268,34 @@
 	background-color: #f3f4f6;
 }
 
-.diagnosis-table tbody tr.diagnosis-row-link {
-	cursor: pointer;
-}
-
-.diagnosis-table tbody tr.diagnosis-row-link:hover {
+.diagnosis-table tbody tr:hover {
 	background-color: #e5e7eb;
 }
 
-.diagnosis-table tbody tr.diagnosis-row-link:focus {
+.diagnosis-row-link {
+	appearance: none;
+	-webkit-appearance: none;
+	border: none;
+	background: transparent;
+	padding: 0;
+	margin: 0;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+	display: block;
+	width: 100%;
+	text-align: left;
+	line-height: inherit;
+}
+
+.diagnosis-row-link:focus {
 	outline: none;
 }
 
-.diagnosis-table tbody tr.diagnosis-row-link:focus-visible {
+.diagnosis-row-link:focus-visible {
 	outline: 2px solid #2563eb;
-	outline-offset: -2px;
+	outline-offset: 2px;
+	border-radius: 6px;
 }
 
 .sort-indicator {

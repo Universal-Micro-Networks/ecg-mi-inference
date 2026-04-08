@@ -11,6 +11,7 @@ type Props = {
 	open: boolean;
 	onClose: () => void;
 	examinationId: string;
+	patientExternalId?: string;
 	status: InferenceDetail["status"];
 	inference?: InferenceDetail | null;
 	liveResult?: InferenceStatusResponse | null;
@@ -82,10 +83,12 @@ const SuccessIcon = () => (
 
 function buildClipboardText(
 	examinationId: string,
+	patientExternalId: string | undefined,
 	merged: Record<string, unknown>,
 ): string {
 	const lines = [
 		`診察ID: ${examinationId}`,
+		`患者ID: ${patientExternalId ?? "-"}`,
 		`ステータス: ${merged.status ?? "-"}`,
 		`リスクスコア: ${merged.risk_score != null ? `${merged.risk_score}%` : "-"}`,
 		`リスクレベル: ${merged.risk_level ?? "-"}`,
@@ -98,6 +101,7 @@ export const JudgmentModal = ({
 	open,
 	onClose,
 	examinationId,
+	patientExternalId,
 	status,
 	inference,
 	liveResult,
@@ -122,8 +126,13 @@ export const JudgmentModal = ({
 	const isNegative = isComplete && riskLevel === "低";
 
 	const clipboardText = useMemo(
-		() => buildClipboardText(examinationId, merged as Record<string, unknown>),
-		[examinationId, merged],
+		() =>
+			buildClipboardText(
+				examinationId,
+				patientExternalId,
+				merged as Record<string, unknown>,
+			),
+		[examinationId, patientExternalId, merged],
 	);
 
 	const copyToClipboard = useCallback(async () => {
