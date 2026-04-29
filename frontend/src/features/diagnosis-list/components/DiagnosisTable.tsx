@@ -1,4 +1,5 @@
 import { formatDateTimeJa } from "../../../lib/datetime";
+import { formatPatientName } from "../../../lib/patientName";
 import type { ExaminationSummary } from "../types";
 
 type Props = {
@@ -66,7 +67,9 @@ export const DiagnosisTable = ({
 		</thead>
 		<tbody>
 			{data.map((item) => {
-				const rowLabel = `診察詳細: ${item.patient.name} ${formatDateTimeJa(
+				const patientDisplayName = formatPatientName(item.patient.name);
+				const isAgeUnknown = item.patient.age == null;
+				const rowLabel = `診察詳細: ${patientDisplayName} ${formatDateTimeJa(
 					item.exam_date,
 				)}`;
 				return (
@@ -88,7 +91,7 @@ export const DiagnosisTable = ({
 								aria-label={rowLabel}
 								onClick={() => onOpenDetail(item.id)}
 							>
-								{item.patient.name}
+								{patientDisplayName}
 							</button>
 						</td>
 						<td>
@@ -104,11 +107,15 @@ export const DiagnosisTable = ({
 						<td>
 							<button
 								type="button"
-								className="diagnosis-row-link"
+								className={`diagnosis-row-link ${
+									isAgeUnknown
+										? "diagnosis-row-link--age-unknown"
+										: "diagnosis-row-link--age-number"
+								}`}
 								aria-label={rowLabel}
 								onClick={() => onOpenDetail(item.id)}
 							>
-								{item.patient.age}
+								{isAgeUnknown ? "不明" : item.patient.age}
 							</button>
 						</td>
 						<td>

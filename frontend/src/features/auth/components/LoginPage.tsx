@@ -25,10 +25,20 @@ const getStrength = (value: string): "weak" | "medium" | "strong" => {
 
 export const LoginPage = () => {
 	const navigate = useNavigate();
-	const { isAuthenticated, isLoading, error, login } = useAuth();
+	const {
+		isAuthenticated,
+		isLoading,
+		requiresSetup,
+		error,
+		login,
+		bootstrapPassword,
+	} = useAuth();
 	const [password, setPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
+	const [clientError, setClientError] = useState<string | null>(null);
 	const passwordInputId = "login-password";
+	const confirmPasswordInputId = "login-password-confirm";
 
 	if (isAuthenticated || getAccessToken()) {
 		return <Navigate to="/diagnoses" replace />;
@@ -36,11 +46,29 @@ export const LoginPage = () => {
 
 	const onSubmit = async (e: FormEvent) => {
 		e.preventDefault();
-		await login(password);
+		setClientError(null);
+		if (requiresSetup) {
+			const normalized = password.trim();
+			if (normalized !== confirmPassword.trim()) {
+				setClientError("確認用パスワードが一致しません");
+				setPassword("");
+				setConfirmPassword("");
+				return;
+			}
+			const ok = await bootstrapPassword(normalized);
+			if (!ok) {
+				setPassword("");
+				setConfirmPassword("");
+				return;
+			}
+		}
+		// 末尾改行やコピペ由来の空白で 401 になりやすいので正規化する
+		await login(password.trim());
 		if (getAccessToken()) {
 			navigate("/diagnoses", { replace: true });
 		} else {
 			setPassword("");
+			setConfirmPassword("");
 		}
 	};
 
@@ -49,8 +77,13 @@ export const LoginPage = () => {
 			<div className="auth-login-shell">
 				<h1 className="auth-app-name">{APP_DISPLAY_NAME}</h1>
 				<form onSubmit={onSubmit} aria-label="認証">
+					{requiresSetup ? (
+						<p className="auth-login-note">
+							管理者パスワードが未設定です。初回パスワードを設定してください。
+						</p>
+					) : null}
 					<label htmlFor={passwordInputId} className="auth-login-label">
-						パスワード
+						{requiresSetup ? "初回パスワード" : "パスワード"}
 					</label>
 					<div className="auth-login-input-row">
 						<input
@@ -69,16 +102,42 @@ export const LoginPage = () => {
 							{showPassword ? "隠す" : "表示"}
 						</button>
 					</div>
+					{requiresSetup ? (
+						<>
+							<label
+								htmlFor={confirmPasswordInputId}
+								className="auth-login-label"
+							>
+								初回パスワード（確認）
+							</label>
+							<input
+								id={confirmPasswordInputId}
+								type={showPassword ? "text" : "password"}
+								value={confirmPassword}
+								onChange={(e) => setConfirmPassword(e.target.value)}
+								className="auth-login-input"
+								aria-label="初回パスワード確認"
+							/>
+						</>
+					) : null}
 					<PasswordStrengthIndicator strength={getStrength(password)} />
 
-					{error ? <div className="auth-login-error">{error}</div> : null}
+					{clientError || error ? (
+						<div className="auth-login-error">{clientError || error}</div>
+					) : null}
 
 					<button
 						type="submit"
 						disabled={!password || isLoading}
 						className="auth-login-submit"
 					>
-						{isLoading ? "ログイン中..." : "ログイン"}
+						{isLoading
+							? requiresSetup
+								? "設定中..."
+								: "ログイン中..."
+							: requiresSetup
+								? "初回設定してログイン"
+								: "ログイン"}
 					</button>
 				</form>
 			</div>

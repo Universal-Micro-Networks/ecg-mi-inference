@@ -49,12 +49,25 @@ services:
     env_file:
       - .env
     environment:
-      # コンテナ内の SQLite パスは常にボリューム先に固定（ホスト .env の DATABASE_URL は上書き）
-      - DATABASE_URL=sqlite:////app/data/ecg_mi.db
+      # 既定はインメモリ。ファイル運用に戻すときは .env で DATABASE_URL=sqlite:////app/data/ecg_mi.db を指定
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///:memory:}
+      # DB に入る MFER パスをコンテナ内に固定（ホストの絶対パスが .env にあっても上書き）
+      - MFER_PROCESSED_FOLDER=/app/processed
+      - MFER_ERROR_FOLDER=/app/error
+      # .env の MFER_WATCH_FOLDER を優先。未設定時のみ既定値を使って自動取り込みを有効化
+      - MFER_WATCH_FOLDER=${MFER_WATCH_FOLDER:-/app/develop/test_data}
+      # 空 DB でもデモ患者・診察を投入しない（ローカル uvicorn では未設定のまま従来どおり）
+      - ECG_MI_SKIP_SAMPLE_DB_SEED=1
+      # セキュリティ優先: 生成物（CSV/ECG画像キャッシュ/推論結果）を永続化しない
+      - ECG_MI_EPHEMERAL_MODE=1
+      # アプリ内 logger("app.*") の出力レベル（推論詳細ログを表示）
+      - APP_LOG_LEVEL=INFO
     volumes:
       - ./backend/app:/app/app
+      # BNP 設定など（ホストで編集した内容がそのまま反映。未マウント時はイメージ内の config）
+      - ./backend/config:/app/config
       - ./backend/data:/app/data
-      # file_importer の MFER_PROCESSED_FOLDER / MFER_ERROR_FOLDER 既定（/app/processed 等）とホストを同期
+      # file_importer の移動先（ホスト ./backend/processed と同期）
       - ./backend/processed:/app/processed
       - ./backend/error:/app/error
       # MFER 監視用（.env の MFER_WATCH_FOLDER を /app/develop/... に合わせる）
@@ -71,7 +84,3 @@ services:
 networks:
   ecg-mi-network:
     driver: bridge
-
-volumes:
-  backend_data:
-    driver: local

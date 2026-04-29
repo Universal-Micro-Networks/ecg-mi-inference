@@ -10,17 +10,23 @@ describe("useAuth", () => {
 	});
 
 	it("ログイン成功時に access/refresh token を保存する", async () => {
-		vi.spyOn(global, "fetch").mockResolvedValueOnce(
-			new Response(
-				JSON.stringify({
-					access_token: "new-access-token",
-					refresh_token: "new-refresh-token",
-					token_type: "bearer",
-					expires_in: 3600,
+		vi.spyOn(global, "fetch")
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ requires_setup: false }), {
+					status: 200,
 				}),
-				{ status: 200 },
-			),
-		);
+			)
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						access_token: "new-access-token",
+						refresh_token: "new-refresh-token",
+						token_type: "bearer",
+						expires_in: 3600,
+					}),
+					{ status: 200 },
+				),
+			);
 
 		const { result } = renderHook(() => useAuth());
 
@@ -33,9 +39,13 @@ describe("useAuth", () => {
 	});
 
 	it("ログアウト時に token を削除する", async () => {
-		vi.spyOn(global, "fetch").mockResolvedValueOnce(
-			new Response("", { status: 200 }),
-		);
+		vi.spyOn(global, "fetch")
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ requires_setup: false }), {
+					status: 200,
+				}),
+			)
+			.mockResolvedValueOnce(new Response("", { status: 200 }));
 		setTokens({
 			accessToken: "existing-access",
 			refreshToken: "existing-refresh",

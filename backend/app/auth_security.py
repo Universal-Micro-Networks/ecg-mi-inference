@@ -6,7 +6,6 @@ Single-user, password-only auth with JWT access/refresh tokens.
 
 from __future__ import annotations
 
-import logging
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -20,8 +19,6 @@ from sqlalchemy.orm import Session
 
 from .database import get_db
 from .models import SystemConfig, TokenBlacklist
-
-logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -73,21 +70,6 @@ def _get_refresh_exp_hours() -> int:
     return int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_HOURS", "24"))
 
 
-def _initial_admin_password_from_env() -> str | None:
-    raw = os.getenv("INITIAL_ADMIN_PASSWORD")
-    if raw is None:
-        return None
-    s = raw.strip()
-    return s if s else None
-
-
-def _env_flag(name: str) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return False
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
-
-
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
@@ -118,54 +100,6 @@ def set_system_password_hash(db: Session, password_hash: str) -> None:
     else:
         db.add(SystemConfig(key="system_password", value=password_hash))
     db.commit()
-
-
-def init_system_password_if_missing(db: Session) -> None:
-    """
-    On startup, ensure the system password is set.
-
-    - RESYNC_INITIAL_ADMIN_PASSWORD=1 と INITIAL_ADMIN_PASSWORD があれば、既存の bcrypt があっても
-      常に上書き（開発・パスワード取り違えリカバリ用。本番では原則無効のまま）。
-    - 上記以外で DB に有効な bcrypt がある場合は何もしない（.env のパスワード変更はログインに反映されない）。
-    - 未設定かつ INITIAL_ADMIN_PASSWORD あり: 初回 bcrypt 保存。
-    - 無効なプレースホルダのみ: INITIAL_ADMIN_PASSWORD で差し替え。
-    """
-    current = get_system_password_hash(db)
-    initial = _initial_admin_password_from_env()
-
-    if _env_flag("RESYNC_INITIAL_ADMIN_PASSWORD"):
-        if not initial:
-            raise RuntimeError(
-                "RESYNC_INITIAL_ADMIN_PASSWORD が有効ですが INITIAL_ADMIN_PASSWORD が空です。"
-            )
-        logger.warning(
-            "RESYNC_INITIAL_ADMIN_PASSWORD: 管理者パスワードを INITIAL_ADMIN_PASSWORD で上書きしました。"
-        )
-        set_system_password_hash(db, hash_password(initial))
-        return
-
-    if current and stored_password_hash_is_usable(current):
-        return
-
-    if current and not stored_password_hash_is_usable(current):
-        if not initial:
-            raise RuntimeError(
-                "DB の system_password が有効な bcrypt ではありません。"
-                " INITIAL_ADMIN_PASSWORD を設定して再起動するか、system_config を修正してください。"
-            )
-        logger.warning(
-            "DB の system_password を無効な値から差し替えます（開発用プレースホルダ等）。"
-            " INITIAL_ADMIN_PASSWORD を使用して bcrypt を保存します。"
-        )
-        set_system_password_hash(db, hash_password(initial))
-        return
-
-    if not initial:
-        raise RuntimeError(
-            "System password is not initialized. Set INITIAL_ADMIN_PASSWORD and restart."
-        )
-
-    set_system_password_hash(db, hash_password(initial))
 
 
 def _jwt_secret() -> str:

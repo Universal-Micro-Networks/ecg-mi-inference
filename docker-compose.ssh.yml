@@ -1,12 +1,11 @@
-# バックエンドの mfer-tools を、ビルド時に git+ssh で取得する（非公開リポジトリ向け）
-# 使い方: DOCKER_BUILDKIT=1 docker compose -f docker-compose.yml -f docker-compose.ssh.yml build backend
-# または make build-ssh / make dev-ssh
+# 互換のため残しています。バックエンド Dockerfile は uv.lock 由来の git+https で
+# mfer-tools / inference-ecg-bnp を取得するため、SSH マウントは必須ではありません。
+# 将来、Dockerfile 内で `RUN --mount=type=ssh` を使う場合に `docker compose build --ssh default` を付けてください。
 #
-# 事前に GitHub へ SSH 接続できること（ssh -T git@github.com）
+# 使い方（従来どおり）:
+#   make dev-ssh / make build-ssh
 services:
   backend:
     build:
-      args:
-        MFER_TOOLS_INSTALL: ssh
       ssh:
         - default

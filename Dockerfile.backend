@@ -1,57 +1,39 @@
 # syntax=docker/dockerfile:1
-# mfer-tools: MFER_TOOLS_INSTALL=vendor（既定）または ssh（BuildKit + ホストの SSH 鍵）
-ARG MFER_TOOLS_INSTALL=vendor
-ARG MFER_TOOLS_COMMIT=1012d5ce92ea3279eab975716d6314c8708894b2
+# 依存の大部分は backend/uv.lock から pip インストール。
+# inference_ecg_bnp / mfer-tools は非公開 git のビルド失敗を避けるため、
+# ホストで `make vendor-mfer-tools` と `make vendor-inference-bnp` 済みの vendor を COPY してから pip install する。
+# （公開リポジトリのみなら将来、git 直取りに戻せます）
 
-FROM python:3.13-slim AS base
+FROM python:3.13-slim
 
 WORKDIR /app
 
-# curl: Compose healthcheck。libsndfile1: librosa / soundfile 周りでよく必要
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    git \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# bcrypt 4.1+ は passlib 1.7.x と非互換のため上限を固定（mfer-tools は各ステージで追加）
-RUN pip install --no-cache-dir \
-    "bcrypt>=4.0.1,<4.1.0" \
-    fastapi \
-    uvicorn[standard] \
-    sqlalchemy \
-    pandas \
-    matplotlib \
-    pillow \
-    python-dateutil \
-    python-jose \
-    passlib[bcrypt] \
-    watchdog
-
-FROM base AS mfer-vendor
-# 非公開リポジトリで SSH ビルドを使わない場合: ホストで make vendor-mfer-tools 済みであること
 COPY backend/vendor/mfer-tools /tmp/mfer-tools
-RUN test -f /tmp/mfer-tools/pyproject.toml || ( \
-    echo "ERROR: backend/vendor/mfer-tools に mfer-tools が無いです。make vendor-mfer-tools を実行するか、MFER_TOOLS_INSTALL=ssh でビルドしてください（backend/vendor/README.md）。" >&2; \
+COPY backend/vendor/inference_ecg_bnp /tmp/inference-ecg-bnp
+RUN test -f /tmp/mfer-tools/pyproject.toml && test -f /tmp/inference-ecg-bnp/pyproject.toml || ( \
+    echo "ERROR: backend/vendor/mfer-tools と backend/vendor/inference_ecg_bnp が必要です。" >&2; \
+    echo "  make vendor-mfer-tools && make vendor-inference-bnp を実行してから docker compose build してください。" >&2; \
     exit 1 \
-    )
-RUN pip install --no-cache-dir /tmp/mfer-tools
+)
 
-FROM base AS mfer-ssh
-# pip の VCS 取得に git、認証に openssh（BuildKit --ssh でエージェント/鍵を渡す）
-RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p -m 0700 /root/.ssh \
-    && ssh-keyscan -t ed25519,rsa github.com >> /root/.ssh/known_hosts 2>/dev/null || true
-ARG MFER_TOOLS_COMMIT
-RUN --mount=type=ssh \
-    pip install --no-cache-dir \
-    "mfer-tools @ git+ssh://git@github.com/tkwataru/mfer-tools.git@${MFTER_TOOLS_COMMIT}"
+COPY backend/pyproject.toml backend/uv.lock /deps/
+WORKDIR /deps
+RUN pip install --no-cache-dir uv && \
+    uv export --frozen --no-dev --no-hashes -o /tmp/requirements-full.txt && \
+    grep -Ev '^(inference-ecg-bnp|mfer-tools) @' /tmp/requirements-full.txt > /tmp/requirements.txt && \
+    pip install --no-cache-dir -r /tmp/requirements.txt && \
+    pip install --no-cache-dir /tmp/mfer-tools /tmp/inference-ecg-bnp
 
-ARG MFER_TOOLS_INSTALL
-FROM mfer-${MFER_TOOLS_INSTALL} AS runtime
-
+WORKDIR /app
 COPY backend/app ./app
+COPY backend/config ./config
 
 EXPOSE 8000
 

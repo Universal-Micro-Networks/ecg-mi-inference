@@ -1,0 +1,34 @@
+# ECG→BNP 推論（inference_ecg_bnp）用設定。環境変数 ECG_BNP_INFERENCE_CONFIG=config/bnp_infer.yaml で指定（backend からの相対パス）。
+device: "cpu"
+checkpoint_path: "../data/models/model-max_r2-epoch=09-val_loss=1.05789-val_auc=0.860-val_r=0.718-val_r2=0.497-val_sens=0.720-val_spec=0.822.pth"
+norm_csv_path: null
+
+cqt_params:
+  sampling_rate: 500
+  hop_length: 8
+  n_bins: 84
+  bins_per_octave: 12
+  frequency_min: 1.0
+
+model_params:
+  input_ch: 12
+  num_classes: 1
+  model_name: "swinv2_base_window8_256.ms_in1k"
+  transformer: true
+  width: 512
+  height: 128
+  activation_function: "softplus"
+  magnification: 100
+  output_bias_add: null
+
+test_augmentations:
+  center_crop: true
+  center_crop_width: 600
+  center_crop_height: 84
+  resize: true
+  resize_width: 512
+  resize_height: 128
+
+use_ch_list: null
+pred_is_log1p: false
+clip_minmax: null

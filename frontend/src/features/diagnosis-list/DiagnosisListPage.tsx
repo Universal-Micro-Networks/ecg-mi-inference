@@ -6,6 +6,7 @@ import {
 	useState,
 } from "react";
 import { useSearchParams } from "react-router-dom";
+import { formatDateTimeJa } from "../../lib/datetime";
 import { DiagnosisDetailPanel } from "./components/DiagnosisDetailPanel";
 import { DiagnosisTable } from "./components/DiagnosisTable";
 import { EmptyState } from "./components/EmptyState";
@@ -17,19 +18,6 @@ import { useDiagnosisFilters } from "./hooks/useDiagnosisFilters";
 import { useDiagnosisList } from "./hooks/useDiagnosisList";
 import { useExaminationsSse } from "./hooks/useExaminationsSse";
 import { useSortQueryParams } from "./hooks/useSortQueryParams";
-
-const formatUpdatedAt = (timestamp?: number) => {
-	if (!timestamp) {
-		return "";
-	}
-	const date = new Date(timestamp);
-	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
-		2,
-		"0",
-	)}-${String(date.getDate()).padStart(2, "0")} ${String(
-		date.getHours(),
-	).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-};
 
 export const DiagnosisListPage = () => {
 	useExaminationsSse();
@@ -181,7 +169,8 @@ export const DiagnosisListPage = () => {
 					<span className="record-count">{recordCountLabel}</span>
 					{dataUpdatedAt ? (
 						<span className="last-updated-inline">
-							最終更新: {formatUpdatedAt(dataUpdatedAt)}
+							最終更新:{" "}
+							{formatDateTimeJa(new Date(dataUpdatedAt).toISOString())}
 						</span>
 					) : null}
 				</div>

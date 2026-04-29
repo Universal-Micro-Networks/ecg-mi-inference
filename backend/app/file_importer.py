@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -49,6 +50,18 @@ def _clean_optional_str(value: str | None) -> str | None:
         return None
     t = value.strip()
     return t if t else None
+
+
+def _normalize_patient_name(value: str) -> str:
+    """
+    患者名の表記を取り込み時に正規化する。
+
+    - 半角カタカナ → 全角カタカナ
+    - 全角英数 → 半角英数
+    - 半角スペース → 全角スペース
+    """
+    normalized = unicodedata.normalize("NFKC", value)
+    return normalized.replace(" ", "　")
 
 
 def _parse_exam_datetime(raw: str) -> datetime:
@@ -135,40 +148,128 @@ def _years_between_birth_and_exam(birth: datetime, exam: datetime) -> int:
     return max(0, years)
 
 
-def _age_from_mwf_age(raw: str | None, exam_date: datetime) -> int | None:
+def _parse_birth_datetime(s: str) -> datetime | None:
+    """生年月日文字列（YYYYMMDD 等）を datetime に。age_day 等は使わない。"""
+    t = s.strip()
+    if not t:
+        return None
+    if len(t) == 8 and t.isdigit():
+        try:
+            return datetime.strptime(t, "%Y%m%d")
+        except ValueError:
+            return None
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
+        try:
+            part = t[:19] if len(t) >= 19 else t
+            return datetime.strptime(part, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _birth_datetime_from_mwf_field(raw: object) -> datetime | None:
+    """mfer-tools の birthday 値（文字列想定）を datetime に。"""
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        return raw
+    if isinstance(raw, str):
+        s = _clean_optional_str(raw)
+        return _parse_birth_datetime(s) if s else None
+    return None
+
+
+def _age_from_mwf_age_dict(d: dict[str, object], exam_date: datetime) -> int | None:
     """
-    MWF_AGE: 年齢（数値）または生年月日（YYYYMMDD 等）を想定。
-    生年月日の場合は検査日時基準で年齢を算出する。
+    MWF_AGE 辞書形式: age は常に存在、birthday は任意（age_day は無視）。
+    birthday が解釈できれば検査日基準の年齢を優先し、否则 age を整数年齢として使う。
     """
+    bday = d.get("birthday")
+    if bday is not None:
+        birth = _birth_datetime_from_mwf_field(bday)
+        if birth is not None:
+            return _years_between_birth_and_exam(birth, exam_date)
+    age_val = d.get("age")
+    if age_val is None:
+        return None
+    if isinstance(age_val, bool):
+        return None
+    if isinstance(age_val, float):
+        if age_val != int(age_val):
+            return None
+        age_val = int(age_val)
+    elif not isinstance(age_val, (int, str)):
+        return None
+    try:
+        v = int(age_val)
+    except (TypeError, ValueError):
+        return None
+    if 0 <= v <= 150:
+        return v
+    return None
+
+
+def _age_from_mwf_age(raw: object | None, exam_date: datetime) -> int | None:
+    """
+    MWF_AGE: 従来どおり文字列（年齢または生年月日）、または辞書
+    ``{'age': int, 'age_day': ...?, 'birthday'?: ...}``。
+    生年月日の場合は検査日時基準で年齢を算出する。age_day は参照しない。
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return _age_from_mwf_age_dict(raw, exam_date)
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw if 0 <= raw <= 150 else None
+    if isinstance(raw, float):
+        if raw != int(raw):
+            return None
+        iv = int(raw)
+        return iv if 0 <= iv <= 150 else None
+    if not isinstance(raw, str):
+        return None
     s = _clean_optional_str(raw)
     if not s:
         return None
-    # 8桁数字 → 生年月日 YYYYMMDD
+    # 8桁数字は先に生年月日 YYYYMMDD として解釈（従来どおり）
     if len(s) == 8 and s.isdigit():
-        try:
-            birth = datetime.strptime(s, "%Y%m%d")
+        birth = _parse_birth_datetime(s)
+        if birth is not None:
             return _years_between_birth_and_exam(birth, exam_date)
-        except ValueError:
-            pass
-    # そのまま年齢（0〜150）
     try:
         v = int(s)
         if 0 <= v <= 150:
             return v
     except ValueError:
         pass
-    # 日付文字列
-    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
-        try:
-            part = s[:19] if len(s) >= 19 else s
-            birth = datetime.strptime(part, fmt)
-            return _years_between_birth_and_exam(birth, exam_date)
-        except ValueError:
-            continue
+    birth = _parse_birth_datetime(s)
+    if birth is not None:
+        return _years_between_birth_and_exam(birth, exam_date)
     return None
 
 
-def _log_mfer_header_snapshot(file_path: Path, header: dict[str, str]) -> None:
+def _header_field_str(value: object | None) -> str | None:
+    """MWF_* の文字列フィールド用（dict/list はヘッダ異常として扱わない）。"""
+    if value is None or isinstance(value, (dict, list)):
+        return None
+    if isinstance(value, str):
+        return _clean_optional_str(value)
+    return _clean_optional_str(str(value))
+
+
+def _header_value_preview(v: object, max_val: int) -> str:
+    if isinstance(v, dict):
+        s = repr(v)
+    else:
+        s = str(v)
+    if len(s) > max_val:
+        return f"{s[: max_val - 3]}..."
+    return s
+
+
+def _log_mfer_header_snapshot(file_path: Path, header: dict[str, object]) -> None:
     """MFER から取り込めたヘッダー内容を運用確認用に INFO で出す（値は長い場合は省略）。"""
     if extract_mfer_header is None:
         logger.info("mfer header: extract_mfer_header が利用できません (%s)", file_path.name)
@@ -182,10 +283,7 @@ def _log_mfer_header_snapshot(file_path: Path, header: dict[str, str]) -> None:
     max_val = 80
     preview: dict[str, str] = {}
     for k, v in sorted(header.items()):
-        if len(v) > max_val:
-            preview[k] = f"{v[: max_val - 3]}..."
-        else:
-            preview[k] = v
+        preview[k] = _header_value_preview(v, max_val)
     logger.info(
         "mfer header: %s から %d キー — %s",
         file_path.name,
@@ -195,12 +293,17 @@ def _log_mfer_header_snapshot(file_path: Path, header: dict[str, str]) -> None:
 
 
 def _build_metadata(file_path: Path) -> ImportMetadata:
-    header: dict[str, str] = {}
+    header: dict[str, object] = {}
     if extract_mfer_header:
         try:
             raw = extract_mfer_header(str(file_path))
             if isinstance(raw, dict):
-                header = {str(k): str(v) for k, v in raw.items()}
+                for k, v in raw.items():
+                    ks = str(k)
+                    if ks == "MWF_AGE" and isinstance(v, dict):
+                        header[ks] = v
+                    else:
+                        header[ks] = "" if v is None else str(v)
         except Exception:
             logger.debug("extract_mfer_header failed for %s", file_path.name, exc_info=True)
 
@@ -211,18 +314,19 @@ def _build_metadata(file_path: Path) -> ImportMetadata:
         xml_meta = _extract_from_xml(file_path.with_suffix(".xml"))
 
     # MFER ヘッダ優先: (1)MWF_PNM (2)MWF_PID (3)MWF_AGE (4)MWF_SEX (5)MWF_TIM
-    raw_pid = _clean_optional_str(header.get("MWF_PID")) or _clean_optional_str(
+    raw_pid = _header_field_str(header.get("MWF_PID")) or _clean_optional_str(
         xml_meta.get("patient_id")
     )
-    exam_raw = _clean_optional_str(header.get("MWF_TIM")) or _clean_optional_str(
+    exam_raw = _header_field_str(header.get("MWF_TIM")) or _clean_optional_str(
         xml_meta.get("exam_time")
     )
     patient_name = (
-        _clean_optional_str(header.get("MWF_PNM"))
+        _header_field_str(header.get("MWF_PNM"))
         or _clean_optional_str(xml_meta.get("patient_name"))
         or "不明"
     )
-    gender = _gender_from_mwf_sex(header.get("MWF_SEX")) or _gender_label(
+    patient_name = _normalize_patient_name(patient_name)
+    gender = _gender_from_mwf_sex(_header_field_str(header.get("MWF_SEX"))) or _gender_label(
         xml_meta.get("gender_code")
     )
     exam_type = xml_meta.get("exam_type")
@@ -237,12 +341,24 @@ def _build_metadata(file_path: Path) -> ImportMetadata:
             file_path.name,
         )
     if not exam_raw:
-        raise FileImporterError("ValidationError: missing exam_time")
-
-    try:
-        exam_datetime = _parse_exam_datetime(exam_raw)
-    except Exception as e:
-        raise FileImporterError(f"ValidationError: invalid exam_time={exam_raw}") from e
+        try:
+            st = file_path.stat()
+            ts = st.st_mtime
+        except OSError as e:
+            raise FileImporterError(
+                "ValidationError: missing exam_time and cannot stat file"
+            ) from e
+        exam_datetime = datetime.fromtimestamp(ts)
+        logger.warning(
+            "exam_time missing in MFER/XML; using file mtime %s (%s)",
+            exam_datetime.isoformat(timespec="seconds"),
+            file_path.name,
+        )
+    else:
+        try:
+            exam_datetime = _parse_exam_datetime(exam_raw)
+        except Exception as e:
+            raise FileImporterError(f"ValidationError: invalid exam_time={exam_raw}") from e
 
     age = _age_from_mwf_age(header.get("MWF_AGE"), exam_datetime)
 
@@ -269,13 +385,19 @@ def _get_or_create_patient(db: Session, meta: ImportMetadata) -> Patient:
     )
     db.add(patient)
     db.flush()
-    logger.info("patient created: %s", meta.patient_external_id)
+    logger.info(
+        "patient created: %s name=%r age=%s gender=%r",
+        meta.patient_external_id,
+        meta.patient_name,
+        meta.age,
+        meta.gender,
+    )
     return patient
 
 
 def _ensure_exam_and_inference(
     db: Session, patient: Patient, file_path: Path, meta: ImportMetadata
-) -> Examination | None:
+) -> Examination:
     exists = (
         db.query(Examination)
         .filter(Examination.patient_id == patient.id, Examination.exam_date == meta.exam_datetime)
@@ -285,7 +407,7 @@ def _ensure_exam_and_inference(
         logger.warning(
             "duplicate exam skipped: patient=%s exam=%s", patient.patient_id, meta.exam_datetime
         )
-        return None
+        return exists
 
     exam = Examination(
         patient_id=patient.id,
@@ -331,34 +453,55 @@ def _import_destination_dir(success: bool) -> Path:
     return d.resolve()
 
 
-def _move_one_into_dir(src: Path, dest_dir: Path) -> Path:
+def _next_available_target(dest_dir: Path, basename: str, suffix: str) -> Path:
+    target = dest_dir / f"{basename}{suffix}"
+    if not target.exists():
+        return target
+    i = 2
+    while True:
+        candidate = dest_dir / f"{basename}_{i}{suffix}"
+        if not candidate.exists():
+            return candidate
+        i += 1
+
+
+def _move_one_into_dir(src: Path, dest_dir: Path, *, target_name: str | None = None) -> Path:
     dest_dir = dest_dir.resolve()
-    target = dest_dir / src.name
+    if target_name:
+        target = _next_available_target(dest_dir, Path(target_name).stem, Path(target_name).suffix)
+    else:
+        target = _next_available_target(dest_dir, src.stem, src.suffix)
     shutil.move(str(src), str(target))
     return target.resolve()
 
 
-def _move_mfer_bundle(mwf_path: Path, success: bool) -> Path:
+def _move_mfer_bundle(
+    mwf_path: Path, success: bool, *, base_name: str | None = None
+) -> tuple[Path, list[Path]]:
     """
     MWF を processed / error に移動し、存在すれば同名の .XML / .xml も同じフォルダへ移動する。
     """
     xml_paths = _companion_xml_paths(mwf_path)
     dest_dir = _import_destination_dir(success)
-    mwf_dest = _move_one_into_dir(mwf_path, dest_dir)
+    mwf_target_name = f"{base_name}{mwf_path.suffix}" if base_name else None
+    mwf_dest = _move_one_into_dir(mwf_path, dest_dir, target_name=mwf_target_name)
+    moved_xml: list[Path] = []
     for xp in xml_paths:
         try:
-            _move_one_into_dir(xp, dest_dir)
+            xml_target_name = f"{base_name}{xp.suffix}" if base_name else None
+            moved_xml_path = _move_one_into_dir(xp, dest_dir, target_name=xml_target_name)
+            moved_xml.append(moved_xml_path)
             logger.info(
                 "companion xml moved with mfer: %s -> %s/",
-                xp.name,
+                moved_xml_path.name,
                 dest_dir.name,
             )
         except Exception:
             logger.warning("companion xml move failed: %s", xp.name, exc_info=True)
-    return mwf_dest
+    return mwf_dest, moved_xml
 
 
-def _update_exam_file_path(exam_id: str, moved_to: Path) -> None:
+def _update_exam_file_path(exam_id: str, moved_to: Path, moved_xml_paths: list[Path]) -> None:
     db = SessionLocal()
     try:
         exam = db.query(Examination).filter(Examination.id == exam_id).first()
@@ -367,7 +510,10 @@ def _update_exam_file_path(exam_id: str, moved_to: Path) -> None:
         exam.csv_file_path = str(moved_to)
         exam.mfer_file_path = str(moved_to)
         note = exam.notes or ""
-        exam.notes = f"{note} moved_mfer_path={moved_to}".strip()
+        extra = [f"moved_mfer_path={moved_to}"]
+        for xp in moved_xml_paths:
+            extra.append(f"moved_xml_path={xp}")
+        exam.notes = f"{note} {' '.join(extra)}".strip()
         db.commit()
     finally:
         db.close()
@@ -392,18 +538,25 @@ def import_mfer_file(file_path: str) -> None:
         meta = _build_metadata(path)
         patient = _get_or_create_patient(db, meta)
         exam = _ensure_exam_and_inference(db, patient, path, meta)
-        exam_id = exam.id if exam else None
+        exam_id = exam.id
         db.commit()
-        moved_to = _move_mfer_bundle(path, success=True)
-        if exam_id:
-            _update_exam_file_path(exam_id, moved_to)
+        moved_to, moved_xml_paths = _move_mfer_bundle(path, success=True, base_name=exam_id)
+        _update_exam_file_path(exam_id, moved_to, moved_xml_paths)
         logger.info("file-importer success: %s -> %s", path.name, moved_to.name)
+    except FileImporterError as e:
+        db.rollback()
+        logger.warning("file-importer rejected: %s — %s", path.name, e)
+        try:
+            moved_to, _ = _move_mfer_bundle(path, success=False)
+            logger.info("file moved to error: %s -> %s", path.name, moved_to.name)
+        except Exception:
+            logger.warning("failed to move file to error folder: %s", path.name, exc_info=True)
+        raise
     except Exception as e:
         db.rollback()
-        logger.error("file-importer failed: %s (%s)", path.name, type(e).__name__)
-        logger.debug("file-importer error detail", exc_info=True)
+        logger.exception("file-importer failed: %s (%s)", path.name, type(e).__name__)
         try:
-            moved_to = _move_mfer_bundle(path, success=False)
+            moved_to, _ = _move_mfer_bundle(path, success=False)
             logger.info("file moved to error: %s -> %s", path.name, moved_to.name)
         except Exception:
             logger.warning("failed to move file to error folder: %s", path.name, exc_info=True)
@@ -421,10 +574,6 @@ def import_mfer_file(file_path: str) -> None:
             )
         except Exception:
             logger.debug("examination_events notify failed", exc_info=True)
-
-    if not exam_id:
-        # Duplicate is considered successful end for watcher flow.
-        return
 
 
 if __name__ == "__main__":

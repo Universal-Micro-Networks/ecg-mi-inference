@@ -8,7 +8,6 @@ export type PatientDetail = {
 
 export type InferenceDetail = {
 	status: "未実行" | "実行中" | "完了" | "エラー" | string;
-	risk_score?: number;
 	risk_level?: "低" | "中" | "高" | string;
 	executed_at?: string;
 };
@@ -27,7 +26,6 @@ export type ExaminationDetailResponse = ExaminationDetail | null;
 
 export type InferenceStatusResponse = {
 	status: InferenceDetail["status"];
-	risk_score?: number;
 	risk_level?: InferenceDetail["risk_level"];
 	executed_at?: string;
 };

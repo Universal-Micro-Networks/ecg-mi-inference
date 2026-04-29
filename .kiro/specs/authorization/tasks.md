@@ -8,7 +8,7 @@
 
 - 初期実装は **`localStorage` にトークン保存**（`Authorization: Bearer`）とする
 - ログアウトは access token の `jti` を **ブラックリスト登録**して失効扱いにする
-- 初期パスワードは `INITIAL_ADMIN_PASSWORD` がある場合に DB へ保存し、無い場合は起動エラーとする
+- 初期パスワードは bootstrap API（UI）で DB に保存する（環境変数での投入は行わない）
 
 ## 実装順序（推奨）
 
@@ -80,6 +80,12 @@
   - **エラーハンドリング**:
     - 401/422 のレスポンス整形（設計の表に沿う）
 
+- [x] **1.8.1 初回パスワード bootstrap API 実装**
+  - **内容**:
+    - `GET /api/auth/bootstrap-status`
+    - `POST /api/auth/bootstrap`
+    - パスワード未設定時の `POST /auth/login` は 403 を返す
+
 - [x] **1.9 認可ミドルウェア/依存関係**
   - **ファイル**: `backend/app/core/middleware/auth_middleware.py`（または既存の依存関係注入パターンに合わせる）
   - **内容**:
@@ -87,13 +93,10 @@
     - 除外パス（login/refresh/docs/openapi 等）を明示
     - 401 の detail 文言を統一
 
-- [x] **1.10 初期パスワード設定**
+- [x] **1.10 起動時初期パスワード自動投入の廃止**
   - **内容**:
-    - 起動時に `system_password` 未設定なら
-      - `INITIAL_ADMIN_PASSWORD` があれば hash 化して DB 保存
-      - 無ければ起動エラー（設定要求）
-  - **実装箇所**:
-    - `backend/app/main.py` もしくは設定初期化箇所（既存の初期化フローに合わせる）
+    - `INITIAL_ADMIN_PASSWORD` / `RESYNC_INITIAL_ADMIN_PASSWORD` 依存ロジックを撤去
+    - 起動時は未設定を許容し、UI bootstrap で初期設定
 
 ### 2. Frontend: ログイン UI / ルート保護 / トークン運用
 
@@ -130,6 +133,12 @@
   - **内容**:
     - 未認可ならログインへリダイレクト
     - 認可状態の初期化中はローディング表示（ちらつき抑制）
+    - 無操作タイムアウト（既定8時間）で `clearTokens` + `/login` 遷移
+
+- [x] **2.8 LoginPage 初回セットアップ対応**
+  - **内容**:
+    - bootstrap-status に応じて初回パスワード入力UIを表示
+    - bootstrap 成功後に通常ログイン
 
 - [x] **2.6 API クライアントへの Authorization 付与**
   - **内容**:

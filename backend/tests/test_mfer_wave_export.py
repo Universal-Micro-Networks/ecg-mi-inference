@@ -82,13 +82,15 @@ def test_export_wave_csv_success(tmp_path: Path, monkeypatch, auth_headers):
     assert r.status_code == 200
     body = r.json()
     assert "csv_file_path" in body
-    assert body["csv_file_path"].endswith(f"{exam_id}.csv")
+    assert body["csv_file_path"] is None
+    assert "保存しません" in body["message"]
 
     db = SessionLocal()
     try:
         ex = db.query(Examination).filter(Examination.id == exam_id).first()
         assert ex is not None
-        assert ex.csv_file_path == body["csv_file_path"]
+        # セキュリティ方針: export-wave-csv では DB に保存しない
+        assert ex.csv_file_path == str(mwf.resolve())
     finally:
         db.close()
 
@@ -100,7 +102,7 @@ def test_ensure_wave_csv_uses_canonical_when_present(tmp_path: Path, monkeypatch
 
     db = SessionLocal()
     try:
-        p = Patient(name="A", patient_id="p1", age=1, gender="男性")
+        p = Patient(name="A", patient_id=f"UT-WAVE-A-{uuid4().hex[:12]}", age=1, gender="男性")
         db.add(p)
         db.flush()
         exam = Examination(
@@ -148,7 +150,7 @@ def test_ensure_wave_csv_exports_when_canonical_missing(tmp_path: Path, monkeypa
 
     db = SessionLocal()
     try:
-        p = Patient(name="B", patient_id="p2", age=2, gender="女性")
+        p = Patient(name="B", patient_id=f"UT-WAVE-B-{uuid4().hex[:12]}", age=2, gender="女性")
         db.add(p)
         db.flush()
         exam = Examination(
@@ -186,7 +188,7 @@ def test_ensure_wave_csv_raises_when_only_mwf_and_no_tools(tmp_path: Path, monke
 
     db = SessionLocal()
     try:
-        p = Patient(name="C", patient_id="p3", age=3, gender="男性")
+        p = Patient(name="C", patient_id=f"UT-WAVE-C-{uuid4().hex[:12]}", age=3, gender="男性")
         db.add(p)
         db.flush()
         exam = Examination(

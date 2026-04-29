@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import tempfile
 from pathlib import Path
 
 from .models import Examination
@@ -82,6 +83,39 @@ def export_mfer_wave_csv(exam_id: str, exam: Examination) -> str:
         save_wave_csv(df_wave, out_path)
     except Exception as e:
         logger.exception("save_wave_csv failed for %s", out_path)
+        raise MferWaveExportError(f"波形 CSV の保存に失敗しました: {e}") from e
+
+    return os.path.abspath(out_path)
+
+
+def export_mfer_wave_csv_ephemeral(exam_id: str, exam: Examination) -> str:
+    """
+    Read MFER and write waveform CSV to a temporary file.
+    The caller is responsible for deleting the returned file.
+    """
+    if extract_mfer_data is None or save_wave_csv is None:
+        raise MferWaveExportError(
+            "mfer_tools が利用できません（extract_mfer_data / save_wave_csv）"
+        )
+
+    mfer_path = resolve_mfer_path(exam)
+    try:
+        _header, df_wave = extract_mfer_data(str(mfer_path))
+    except Exception as e:
+        logger.exception("extract_mfer_data failed for %s", mfer_path)
+        raise MferWaveExportError(f"MFER の読み込みに失敗しました: {e}") from e
+
+    # Prefix includes exam id for auditability in logs. The file is deleted by caller.
+    fd, out_path = tempfile.mkstemp(prefix=f"ecg_wave_{exam_id}_", suffix=".csv")
+    os.close(fd)
+    try:
+        save_wave_csv(df_wave, out_path)
+    except Exception as e:
+        logger.exception("save_wave_csv failed for %s", out_path)
+        try:
+            os.remove(out_path)
+        except OSError:
+            pass
         raise MferWaveExportError(f"波形 CSV の保存に失敗しました: {e}") from e
 
     return os.path.abspath(out_path)

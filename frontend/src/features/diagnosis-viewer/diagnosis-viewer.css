@@ -493,6 +493,63 @@
 	margin-top: 0;
 }
 
+.ecg-inference-banner {
+	margin: 0 auto 10px;
+	padding: 10px 14px;
+	border-radius: 12px;
+	backdrop-filter: blur(2px);
+	-webkit-backdrop-filter: blur(2px);
+	background: rgba(17, 24, 39, 0.78);
+	color: #fff;
+	text-align: center;
+	box-shadow: 0 8px 16px rgba(17, 24, 39, 0.25);
+	width: fit-content;
+	max-width: 100%;
+}
+
+.ecg-inference-banner__title {
+	margin: 0;
+	font-size: clamp(1.15rem, 1.8vw, 1.6rem);
+	font-weight: 800;
+	line-height: 1.2;
+	letter-spacing: 0.02em;
+}
+
+.ecg-inference-banner__subtitle {
+	margin: 4px 0 0;
+	font-size: clamp(0.8rem, 1.2vw, 1rem);
+	font-weight: 600;
+	line-height: 1.3;
+	opacity: 0.95;
+}
+
+.ecg-inference-banner--high {
+	background: rgba(185, 28, 28, 0.86);
+}
+
+.ecg-inference-banner--medium {
+	background: rgba(180, 83, 9, 0.86);
+}
+
+.ecg-inference-banner--low {
+	background: rgba(21, 128, 61, 0.84);
+}
+
+.ecg-inference-banner--running {
+	background: rgba(30, 64, 175, 0.84);
+}
+
+.ecg-inference-banner--error {
+	background: rgba(153, 27, 27, 0.9);
+}
+
+@media (max-width: 640px) {
+	.ecg-inference-banner {
+		max-width: 100%;
+		padding: 8px 10px;
+	}
+}
+
 .ecg-image-zoom-hint {
 	margin: 8px 0 0;
 	font-size: 12px;

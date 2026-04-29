@@ -18,6 +18,7 @@ from ..auth_security import (
     get_system_password_hash,
     hash_password,
     set_system_password_hash,
+    stored_password_hash_is_usable,
     validate_password_policy,
     verify_access_token,
     verify_password,
@@ -59,9 +60,43 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class BootstrapStatusResponse(BaseModel):
+    requires_setup: bool
+
+
+class BootstrapRequest(BaseModel):
+    new_password: str = Field(..., min_length=8)
+
+
+def _is_password_bootstrap_required(db: Session) -> bool:
+    password_hash = get_system_password_hash(db)
+    return not stored_password_hash_is_usable(password_hash)
+
+
+@router.get("/auth/bootstrap-status", response_model=BootstrapStatusResponse)
+def bootstrap_status(db: Session = Depends(get_db)):
+    return {"requires_setup": _is_password_bootstrap_required(db)}
+
+
+@router.post("/auth/bootstrap", response_model=MessageResponse)
+def bootstrap_password(payload: BootstrapRequest, db: Session = Depends(get_db)):
+    if not _is_password_bootstrap_required(db):
+        raise HTTPException(status_code=403, detail="管理者パスワードは既に設定されています")
+
+    policy_errors = validate_password_policy(payload.new_password)
+    if policy_errors:
+        raise HTTPException(status_code=422, detail=" / ".join(policy_errors))
+
+    set_system_password_hash(db, hash_password(payload.new_password))
+    logger.info("bootstrap_success")
+    return {"message": "password initialized"}
+
+
 @router.post("/auth/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     password_hash = get_system_password_hash(db)
+    if not password_hash:
+        raise HTTPException(status_code=403, detail="管理者パスワードが未設定です")
     try:
         ok = bool(password_hash and verify_password(payload.password, password_hash))
     except UnknownHashError:

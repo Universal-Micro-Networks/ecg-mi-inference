@@ -33,6 +33,12 @@
 	margin-bottom: 8px;
 }
 
+.auth-login-note {
+	margin: 0 0 12px;
+	font-size: 13px;
+	color: #374151;
+}
+
 .auth-login-input-row {
 	display: flex;
 	gap: 8px;

@@ -7,7 +7,7 @@
 本システムは、12誘導心電図データから心筋梗塞の検出・推論を行うWebアプリケーションです。
 
 - **フロントエンド**: React 18 + TypeScript + Vite
-- **バックエンド**: FastAPI (Python 3.13)
+- **バックエンド**: FastAPI（Python 3.12 以上）
 - **データベース**: SQLite (開発環境)
 
 ## クイックスタート
@@ -33,10 +33,17 @@ docker-compose build
 docker-compose up -d
 ```
 
-アプリケーションへのアクセス:
+### Docker を使わないスタンドアローン
+
+バックエンドのみ（またはフロントも別プロセスで）**本機の Python + uv** で動かす手順は [backend/README.md](./backend/README.md) の「Docker を使わないスタンドアローン実行」を参照してください。最短のコマンド列もそこにあります。
+
+アプリケーションへのアクセス（**Docker Compose で起動した場合**。ホストのブラウザからはバックエンドが **8200** に公開されます）:
+
 - **フロントエンド**: http://localhost:5173
-- **バックエンドAPI**: http://localhost:8000
-- **API ドキュメント**: http://localhost:8000/docs
+- **バックエンド API**: http://localhost:8200
+- **API ドキュメント**: http://localhost:8200/docs
+
+スタンドアローンでバックエンドだけ `uvicorn` を動かした場合は、既定どおり **http://localhost:8000**（`/docs` も同ポート）です。フロントを `npm run dev` で動かすときは、`.env.local` の `VITE_API_URL` などでこの URL に合わせてください（[frontend/README.md](./frontend/README.md) 参照）。
 
 ### よく使うコマンド
 

@@ -5,6 +5,7 @@ Handles examination list, detail, and ECG image retrieval.
 
 import asyncio
 import json
+import os
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -18,13 +19,11 @@ from ..ecg_service import (
     STANDARD_LEAD_NAMES,
     EcgWaveformLoadError,
     generate_ecg_image,
-    invalidate_ecg_cache_for_csv,
 )
 from ..inference_payload import inference_row_to_client_dict, strip_none
 from ..mfer_wave_export import (
     MferWaveExportError,
-    ensure_wave_csv_for_ecg,
-    export_mfer_wave_csv,
+    export_mfer_wave_csv_ephemeral,
 )
 from ..models import Examination, Inference, Patient
 
@@ -195,29 +194,29 @@ def export_examination_wave_csv(
     db: Session = Depends(get_db),
 ):
     """
-    Re-read MFER waveform and write CSV (mfer_tools.extract_mfer_data + save_wave_csv).
-    Updates csv_file_path to the new CSV; clears ECG PNG cache for old and new paths.
+    Re-read MFER waveform and validate CSV export flow on-demand.
+    For security, generated CSV is temporary and deleted immediately.
     """
     exam = db.query(Examination).filter(Examination.id == examination_id).first()
     if not exam:
         raise HTTPException(status_code=404, detail="Examination not found")
 
-    old_csv = exam.csv_file_path
+    tmp_path: str | None = None
     try:
-        new_path = export_mfer_wave_csv(examination_id, exam)
+        tmp_path = export_mfer_wave_csv_ephemeral(examination_id, exam)
     except MferWaveExportError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    finally:
+        if tmp_path:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
-    for path in {old_csv, new_path}:
-        if not path:
-            continue
-        invalidate_ecg_cache_for_csv(path)
-
-    exam.csv_file_path = new_path
-    exam.ecg_image_etag = None
-    db.commit()
-
-    return {"csv_file_path": new_path, "message": "波形 CSV を出力しました"}
+    return {
+        "csv_file_path": None,
+        "message": "波形 CSV はオンデマンドで生成しました（セキュリティ方針により保存しません）",
+    }
 
 
 @router.get("/examinations/{examination_id}/ecg-image")
@@ -233,10 +232,8 @@ def get_ecg_image(
     """
     Get ECG image for examination.
 
-    先に mfer_tools による波形 CSV（``data/waves/{id}.csv`` または MFER からの自動出力）を
-    確保し、その CSV を入力として PNG を生成する。キャッシュは CSV パス単位。
-
-    Supports ETag caching via If-None-Match header（12誘導全体のときのみ DB の etag と照合）。
+    mfer_tools による波形 CSV をオンデマンドで一時生成し、
+    その CSV を入力として PNG を生成する（生成物は保存しない）。
     """
     exam = db.query(Examination).filter(Examination.id == examination_id).first()
 
@@ -252,34 +249,18 @@ def get_ecg_image(
                 detail=f"不明な誘導名: {lead_norm}",
             )
 
-    client_etag = _normalize_if_none_match(if_none_match)
-    if (
-        lead_norm is None
-        and client_etag
-        and exam.ecg_image_etag
-        and client_etag == exam.ecg_image_etag
-    ):
-        return Response(status_code=304)
-
-    old_csv = exam.csv_file_path
+    _ = _normalize_if_none_match(if_none_match)  # Kept for backward-compatible signature.
+    tmp_csv_path: str | None = None
     try:
-        csv_path, persist_csv = ensure_wave_csv_for_ecg(examination_id, exam)
+        tmp_csv_path = export_mfer_wave_csv_ephemeral(examination_id, exam)
     except MferWaveExportError as e:
         raise HTTPException(
             status_code=422,
             detail=f"心電図波形を生成できません: {e}",
         ) from e
 
-    if persist_csv:
-        for path in {old_csv, csv_path}:
-            if not path:
-                continue
-            invalidate_ecg_cache_for_csv(path)
-        exam.csv_file_path = csv_path
-        exam.ecg_image_etag = None
-
     try:
-        image_bytes, etag = generate_ecg_image(csv_path, use_cache=True, lead=lead_norm)
+        image_bytes, etag = generate_ecg_image(tmp_csv_path, use_cache=False, lead=lead_norm)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except EcgWaveformLoadError as e:
@@ -287,12 +268,12 @@ def get_ecg_image(
             status_code=422,
             detail=f"心電図波形を生成できません: {e.reason}",
         ) from e
-
-    if lead_norm is None:
-        exam.ecg_image_etag = etag
-        db.commit()
-    else:
-        db.commit()
+    finally:
+        if tmp_csv_path:
+            try:
+                os.remove(tmp_csv_path)
+            except OSError:
+                pass
 
     fname = f"ecg_{examination_id}_{lead_norm}.png" if lead_norm else f"ecg_{examination_id}.png"
     # Return image with cache headers
@@ -301,7 +282,9 @@ def get_ecg_image(
         media_type="image/png",
         headers={
             "ETag": f'"{etag}"',
-            "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
+            "Cache-Control": "no-store, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
             "Content-Disposition": f"inline; filename={fname}",
         },
     )

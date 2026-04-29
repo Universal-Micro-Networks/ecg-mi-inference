@@ -1,3 +1,4 @@
+import { formatPatientName } from "../../../lib/patientName";
 import type { PatientDetail } from "../types";
 
 type Props = {
@@ -9,7 +10,7 @@ export const PatientInfoCard = ({ patient }: Props) => (
 		<div className="patient-info-row">
 			<div>
 				<span className="label">氏名</span>
-				<span>{patient.name}</span>
+				<span>{formatPatientName(patient.name)}</span>
 			</div>
 			<div>
 				<span className="label">患者ID</span>

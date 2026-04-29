@@ -81,17 +81,93 @@ const SuccessIcon = () => (
 	</svg>
 );
 
+type ResultDetail = {
+	inferenceValueText: string;
+	thresholdText: string;
+};
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+	typeof v === "object" && v !== null;
+
+const asFiniteNumber = (v: unknown): number | null => {
+	if (typeof v === "number" && Number.isFinite(v)) {
+		return v;
+	}
+	if (typeof v === "string") {
+		const n = Number(v);
+		return Number.isFinite(n) ? n : null;
+	}
+	return null;
+};
+
+const parseResultObject = (
+	merged: Record<string, unknown>,
+): Record<string, unknown> | null => {
+	const raw = merged.result;
+	if (isRecord(raw)) {
+		return raw;
+	}
+	if (typeof raw === "string") {
+		try {
+			const parsed: unknown = JSON.parse(raw);
+			return isRecord(parsed) ? parsed : null;
+		} catch {
+			return null;
+		}
+	}
+	return null;
+};
+
+const buildResultDetail = (merged: Record<string, unknown>): ResultDetail => {
+	const resultObj = parseResultObject(merged);
+	const bnpPred =
+		asFiniteNumber(resultObj?.bnp_predicted_pg_ml) ??
+		asFiniteNumber(merged.bnp_predicted_pg_ml);
+	if (bnpPred != null) {
+		return {
+			inferenceValueText: `${bnpPred.toFixed(2)} pg/mL`,
+			thresholdText: "200未満: 低 / 200以上: 高 (pg/mL)",
+		};
+	}
+
+	const miProb =
+		asFiniteNumber(merged.mi_probability) ??
+		asFiniteNumber(resultObj?.mi_probability);
+	if (miProb != null) {
+		return {
+			inferenceValueText: `${(miProb * 100).toFixed(1)}%`,
+			thresholdText: "50.0%（0.50）",
+		};
+	}
+
+	const riskScore =
+		asFiniteNumber(merged.risk_score) ?? asFiniteNumber(resultObj?.risk_score);
+	if (riskScore != null) {
+		return {
+			inferenceValueText: `${Math.round(riskScore)}`,
+			thresholdText: "200未満: 低 / 200以上: 高",
+		};
+	}
+
+	return {
+		inferenceValueText: "—",
+		thresholdText: "—",
+	};
+};
+
 function buildClipboardText(
 	examinationId: string,
 	patientExternalId: string | undefined,
 	merged: Record<string, unknown>,
 ): string {
+	const resultDetail = buildResultDetail(merged);
 	const lines = [
 		`診察ID: ${examinationId}`,
 		`患者ID: ${patientExternalId ?? "-"}`,
 		`ステータス: ${merged.status ?? "-"}`,
-		`リスクスコア: ${merged.risk_score != null ? `${merged.risk_score}%` : "-"}`,
 		`リスクレベル: ${merged.risk_level ?? "-"}`,
+		`閾値: ${resultDetail.thresholdText}`,
+		`推論値: ${resultDetail.inferenceValueText}`,
 		`推論実行日時: ${merged.executed_at ?? "-"}`,
 	];
 	return lines.join("\n");
@@ -122,8 +198,12 @@ export const JudgmentModal = ({
 
 	const isComplete = status === "完了";
 	const riskLevel = merged.risk_level;
-	const isPositive = isComplete && (riskLevel === "高" || riskLevel === "中");
+	const isPositive = isComplete && riskLevel === "高";
 	const isNegative = isComplete && riskLevel === "低";
+	const resultDetail = useMemo(
+		() => buildResultDetail(merged as Record<string, unknown>),
+		[merged],
+	);
 
 	const clipboardText = useMemo(
 		() =>
@@ -230,7 +310,14 @@ export const JudgmentModal = ({
 					リスクあり（陽性）
 				</h2>
 				<p className="judgment-modal__description">
-					心不全のリスクが検出されました。医師による確認をお願いします。
+					研究目的でご使用ください。
+					<br />
+					日常診療では使用しないでください。
+				</p>
+				<p className="judgment-modal__meta">
+					閾値: {resultDetail.thresholdText}
+					<br />
+					推論値: {resultDetail.inferenceValueText}
 				</p>
 			</>
 		);
@@ -249,7 +336,14 @@ export const JudgmentModal = ({
 					リスク低（陰性）
 				</h2>
 				<p className="judgment-modal__description">
-					目立ったリスクは検出されませんでした。結果は参考情報です。
+					研究目的でご使用ください。
+					<br />
+					日常診療では使用しないでください。
+				</p>
+				<p className="judgment-modal__meta">
+					閾値: {resultDetail.thresholdText}
+					<br />
+					推論値: {resultDetail.inferenceValueText}
 				</p>
 			</>
 		);
@@ -261,8 +355,14 @@ export const JudgmentModal = ({
 					判定結果
 				</h2>
 				<p className="judgment-modal__description">
-					リスクスコア {merged.risk_score ?? "-"}%／リスクレベル{" "}
-					{merged.risk_level ?? "-"}
+					研究目的でご使用ください。
+					<br />
+					日常診療では使用しないでください。
+				</p>
+				<p className="judgment-modal__meta">
+					閾値: {resultDetail.thresholdText}
+					<br />
+					推論値: {resultDetail.inferenceValueText}
 				</p>
 				{merged.executed_at ? (
 					<p className="judgment-modal__meta">実行日時: {merged.executed_at}</p>
@@ -316,14 +416,15 @@ export const JudgmentModal = ({
 								推論を実行
 							</button>
 						) : null}
-						<button
-							type="button"
-							className="judgment-modal__btn judgment-modal__btn--primary"
-							onClick={onClose}
-							disabled={isSubmitting}
-						>
-							閉じる
-						</button>
+						{!isRunning && !isSubmitting ? (
+							<button
+								type="button"
+								className="judgment-modal__btn judgment-modal__btn--primary"
+								onClick={onClose}
+							>
+								閉じる
+							</button>
+						) : null}
 					</div>
 				</div>
 			</div>

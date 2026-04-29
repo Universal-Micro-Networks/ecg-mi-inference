@@ -395,12 +395,13 @@ def generate_ecg_image(
     image_bytes = image_buffer.getvalue()
     plt.close(fig)
 
-    try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(cache_path, "wb") as f:
-            f.write(image_bytes)
-    except OSError as e:
-        logger.warning("Failed to cache ECG image: %s", e)
+    if use_cache:
+        try:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            with open(cache_path, "wb") as f:
+                f.write(image_bytes)
+        except OSError as e:
+            logger.warning("Failed to cache ECG image: %s", e)
 
     etag = hashlib.md5(image_bytes).hexdigest()
     return image_bytes, etag

@@ -3,6 +3,7 @@ import {
 	type PointerEvent as ReactPointerEvent,
 	useCallback,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 } from "react";
@@ -31,6 +32,10 @@ type Props = {
 	cacheKey: number;
 	imageUrl: string | null;
 	isLoading: boolean;
+	inferenceOverlay?: {
+		status?: string;
+		risk_level?: string;
+	};
 };
 
 function buildEcgImagePath(
@@ -54,6 +59,7 @@ export const EcgImagePanel = ({
 	cacheKey,
 	imageUrl,
 	isLoading,
+	inferenceOverlay,
 }: Props) => {
 	const [viewerOpen, setViewerOpen] = useState(false);
 	const [viewerLead, setViewerLead] = useState(DEFAULT_VIEWER_LEAD);
@@ -227,6 +233,40 @@ export const EcgImagePanel = ({
 		.filter(Boolean)
 		.join(" ");
 
+	const overlay = useMemo(() => {
+		const status = inferenceOverlay?.status;
+		if (!status || status === "未実行") return null;
+
+		if (status === "実行中") {
+			return {
+				tone: "running",
+				title: "推論実行中",
+				subtitle: "判定結果を計算しています",
+			};
+		}
+		if (status === "エラー") {
+			return {
+				tone: "error",
+				title: "推論エラー",
+				subtitle: "再実行してください",
+			};
+		}
+		if (status === "完了") {
+			const level = inferenceOverlay?.risk_level;
+			let tone = "done";
+			if (level === "高") tone = "high";
+			else if (level === "中") tone = "medium";
+			else if (level === "低") tone = "low";
+
+			return {
+				tone,
+				title: level ? `リスク${level}` : "判定完了",
+				subtitle: "結果を確認してください",
+			};
+		}
+		return null;
+	}, [inferenceOverlay]);
+
 	return (
 		<section className="card ecg-image-card">
 			{isLoading && (
@@ -239,6 +279,17 @@ export const EcgImagePanel = ({
 			)}
 			{!isLoading && imageUrl ? (
 				<>
+					{overlay ? (
+						<div
+							className={`ecg-inference-banner ecg-inference-banner--${overlay.tone}`}
+							aria-live="polite"
+						>
+							<p className="ecg-inference-banner__title">{overlay.title}</p>
+							<p className="ecg-inference-banner__subtitle">
+								{overlay.subtitle}
+							</p>
+						</div>
+					) : null}
 					<button
 						type="button"
 						className="ecg-image-zoom-trigger"

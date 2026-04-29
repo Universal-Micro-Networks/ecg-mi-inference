@@ -19,12 +19,10 @@ export default defineConfig([
 			ecmaVersion: 2020,
 			globals: globals.browser,
 		},
-	},
-	{
-		files: ["**/useInference.ts"],
 		rules: {
-			// 詳細の initial とポーリング結果の同期に effect 内 setState が必要（react-hooks v7 の厳格ルールは過剰）
+			// react-hooks v7 の追加ルールは既存のデータ取得・パネル同期パターンと衝突するため無効化
 			"react-hooks/set-state-in-effect": "off",
+			"react-hooks/refs": "off",
 		},
 	},
 ]);

@@ -42,7 +42,9 @@ npm install
 VITE_API_URL=http://localhost:8000
 ```
 
-デフォルトでは `http://localhost:8000` が使用されます。
+デフォルトでは `http://localhost:8000` が使用されます（`vite.config.ts` のプロキシが `/api` をこの向き先へ転送します。末尾に `/api` を付けた URL を指定しても問題ありません）。
+
+**Docker Compose でバックエンドだけホストに公開している場合**は、既定が `http://localhost:8200/api` になることがあります。本機で `uvicorn` を直接動かしている場合は上記のとおり **8000** に合わせてください。全体の手順はリポジトリルートの [README.md](../README.md) および [backend/README.md](../backend/README.md) のスタンドアローン節を参照してください。
 
 ### 3. 開発サーバーの起動
 

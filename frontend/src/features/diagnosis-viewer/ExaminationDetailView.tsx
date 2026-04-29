@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ConfirmDialog } from "./components/ConfirmDialog";
 import { EcgImagePanel } from "./components/EcgImagePanel";
 import { ExaminationInfoCard } from "./components/ExaminationInfoCard";
 import { JudgmentModal } from "./components/JudgmentModal";
@@ -20,9 +19,14 @@ type Props = {
 function ExaminationEcgSection({
 	examinationId,
 	cacheKey,
+	inferenceOverlay,
 }: {
 	examinationId: string;
 	cacheKey: number;
+	inferenceOverlay?: {
+		status?: string;
+		risk_level?: string;
+	};
 }) {
 	const { imageUrl, isLoading } = useEcgImage(examinationId, cacheKey);
 	return (
@@ -31,6 +35,7 @@ function ExaminationEcgSection({
 			cacheKey={cacheKey}
 			imageUrl={imageUrl}
 			isLoading={isLoading}
+			inferenceOverlay={inferenceOverlay}
 		/>
 	);
 }
@@ -40,7 +45,6 @@ export const ExaminationDetailView = ({ examinationId }: Props) => {
 	const { data, isLoading, isError, error, refetch } =
 		useDiagnosisDetail(examinationId);
 	const [ecgImageKey, setEcgImageKey] = useState(0);
-	const [dialogOpen, setDialogOpen] = useState(false);
 	const [judgmentModalOpen, setJudgmentModalOpen] = useState(false);
 
 	const exportWaveMutation = useMutation({
@@ -86,9 +90,18 @@ export const ExaminationDetailView = ({ examinationId }: Props) => {
 		error: inferenceError,
 	} = useInference(examinationId, initialInference);
 
+	const overlayInference = useMemo(
+		() => ({
+			status: result?.status ?? initialInference?.status,
+			risk_level: result?.risk_level ?? initialInference?.risk_level,
+		}),
+		[result, initialInference],
+	);
+
 	useEffect(() => {
 		if (status === "完了") {
 			refetch();
+			setJudgmentModalOpen(true);
 		}
 	}, [status, refetch]);
 
@@ -111,6 +124,7 @@ export const ExaminationDetailView = ({ examinationId }: Props) => {
 				key={`${examinationId}-${ecgImageKey}`}
 				examinationId={examinationId}
 				cacheKey={ecgImageKey}
+				inferenceOverlay={overlayInference}
 			/>
 			<ExaminationInfoCard
 				collapsible
@@ -126,9 +140,12 @@ export const ExaminationDetailView = ({ examinationId }: Props) => {
 			<button
 				type="button"
 				className="judgment-fab"
-				onClick={() => setJudgmentModalOpen(true)}
+				onClick={() => {
+					void runInference();
+				}}
+				disabled={isRunning || isSubmitting}
 			>
-				判定
+				{isRunning || isSubmitting ? "推論中..." : "判定"}
 			</button>
 			<JudgmentModal
 				open={judgmentModalOpen}
@@ -138,7 +155,9 @@ export const ExaminationDetailView = ({ examinationId }: Props) => {
 				status={status}
 				inference={data.inference}
 				liveResult={result}
-				onRequestRun={() => setDialogOpen(true)}
+				onRequestRun={() => {
+					void runInference();
+				}}
 				isRunning={isRunning}
 				isSubmitting={isSubmitting}
 				error={
@@ -146,16 +165,6 @@ export const ExaminationDetailView = ({ examinationId }: Props) => {
 						? String((inferenceError as Error).message || inferenceError)
 						: null
 				}
-			/>
-			<ConfirmDialog
-				open={dialogOpen}
-				title="推論を実行しますか？"
-				description="推論実行中は画面を閉じずにお待ちください。"
-				onCancel={() => setDialogOpen(false)}
-				onConfirm={async () => {
-					setDialogOpen(false);
-					await runInference();
-				}}
 			/>
 		</div>
 	);

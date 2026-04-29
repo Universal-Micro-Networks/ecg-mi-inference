@@ -41,6 +41,26 @@ def _cleanup(patient_external_id: str) -> None:
         db.close()
 
 
+def test_build_metadata_uses_file_mtime_when_exam_time_missing(tmp_path: Path, monkeypatch) -> None:
+    """MWF_TIM も付帯 XML も無いときは検査日時にファイルの mtime を使う（検証用 MWF 等）。"""
+    mwf = tmp_path / "verify.MWF"
+    mwf.write_bytes(b"dummy")
+    want = datetime(2019, 4, 11, 15, 53, 8)
+    ts = want.timestamp()
+    os.utime(mwf, (ts, ts))
+
+    monkeypatch.setattr(
+        file_importer,
+        "extract_mfer_header",
+        lambda _p: {"MWF_PID": "PID-MTIME-ONLY", "MWF_PNM": "検証用"},
+    )
+
+    meta = file_importer._build_metadata(mwf)
+    assert meta.patient_external_id == "PID-MTIME-ONLY"
+    assert meta.patient_name == "検証用"
+    assert meta.exam_datetime.replace(microsecond=0) == want.replace(microsecond=0)
+
+
 def test_parse_exam_datetime_compact_and_slashed() -> None:
     assert file_importer._parse_exam_datetime("20260101123045") == datetime(2026, 1, 1, 12, 30, 45)
     assert file_importer._parse_exam_datetime("202601011230451234") == datetime(
@@ -71,6 +91,23 @@ def test_age_from_mwf_age_numeric_and_birth() -> None:
     assert file_importer._age_from_mwf_age("1990-01-01", exam) == 36
 
 
+def test_normalize_patient_name_halfwidth_kana_fullwidth_alnum_and_halfwidth_space() -> None:
+    raw = "ﾀﾅｶ abcＡＢＣ１２３"
+    assert file_importer._normalize_patient_name(raw) == "タナカ　abcABC123"
+
+
+def test_age_from_mwf_age_dict_age_only() -> None:
+    exam = datetime(2026, 6, 15, 10, 0, 0)
+    assert file_importer._age_from_mwf_age({"age": 91, "age_day": 0}, exam) == 91
+
+
+def test_age_from_mwf_age_dict_birthday_overrides_age_for_years() -> None:
+    """birthday が解釈できれば検査日基準の年齢を優先（age・age_day は補助）。"""
+    exam = datetime(2026, 6, 15, 10, 0, 0)
+    raw = {"age": 99, "age_day": 0, "birthday": "19340101"}
+    assert file_importer._age_from_mwf_age(raw, exam) == 92
+
+
 def test_import_accepts_uppercase_mwf_and_registers_db(tmp_path: Path, monkeypatch):
     patient_external_id = "UT-FI-001"
     _cleanup(patient_external_id)
@@ -85,7 +122,7 @@ def test_import_accepts_uppercase_mwf_and_registers_db(tmp_path: Path, monkeypat
         lambda _p: {
             "MWF_TIM": "20260101123045",
             "MWF_PID": patient_external_id,
-            "MWF_PNM": "テスト患者",
+            "MWF_PNM": "ﾃｽﾄ 患者Ａ１２",
             "MWF_SEX": "M",
             "MWF_AGE": "45",
         },
@@ -95,18 +132,20 @@ def test_import_accepts_uppercase_mwf_and_registers_db(tmp_path: Path, monkeypat
 
     file_importer.import_mfer_file(str(mwf))
 
-    assert (tmp_path / "processed" / "sample.XML").is_file()
-    assert not (tmp_path / "sample.XML").exists()
-
     db = SessionLocal()
     try:
         patient = db.query(Patient).filter(Patient.patient_id == patient_external_id).first()
         assert patient is not None
+        assert patient.name == "テスト　患者A12"
         assert patient.gender == "男性"
         assert patient.age == 45
         exam = db.query(Examination).filter(Examination.patient_id == patient.id).first()
         assert exam is not None
         assert "processed" in exam.csv_file_path
+        assert Path(exam.mfer_file_path).name == f"{exam.id}.MWF"
+        assert Path(exam.csv_file_path).name == f"{exam.id}.MWF"
+        assert (tmp_path / "processed" / f"{exam.id}.XML").is_file()
+        assert not (tmp_path / "sample.XML").exists()
     finally:
         db.close()
         _cleanup(patient_external_id)
@@ -172,15 +211,20 @@ def test_import_skips_duplicate_exam(tmp_path: Path, monkeypatch):
     _write_sample_xml(tmp_path / "dup2.XML", patient_external_id, "20260102120000")
     file_importer.import_mfer_file(str(mwf2))
 
-    assert (tmp_path / "processed" / "dup1.xml").is_file()
-    assert (tmp_path / "processed" / "dup2.XML").is_file()
-
     db = SessionLocal()
     try:
         patient = db.query(Patient).filter(Patient.patient_id == patient_external_id).first()
         assert patient is not None
         exams = db.query(Examination).filter(Examination.patient_id == patient.id).all()
         assert len(exams) == 1
+        exam = exams[0]
+        processed_files = list((tmp_path / "processed").iterdir())
+        mwf_files = [p for p in processed_files if p.suffix.lower() == ".mwf"]
+        xml_files = [p for p in processed_files if p.suffix.lower() == ".xml"]
+        assert len(mwf_files) == 2
+        assert len(xml_files) == 2
+        assert any(p.stem == exam.id for p in mwf_files)
+        assert any(p.stem == exam.id for p in xml_files)
     finally:
         db.close()
         _cleanup(patient_external_id)
@@ -229,10 +273,14 @@ def test_import_blank_xml_patient_id_uses_synthetic_per_file(tmp_path: Path, mon
 def test_import_invalid_file_moves_to_error_folder(tmp_path: Path, monkeypatch):
     mwf = tmp_path / "broken.MWF"
     mwf.write_bytes(b"broken")
-    # 付帯 XML はあるが中身が無効（患者IDが取れない）— MWF と一緒に error へ移動する経路を確認
     (tmp_path / "broken.XML").write_text("<not-hl7 />")
 
-    monkeypatch.setattr(file_importer, "extract_mfer_header", lambda _p: {})
+    # 検査日時が解釈不能なら FileImporterError（mtime フォールバックは使わない）
+    monkeypatch.setattr(
+        file_importer,
+        "extract_mfer_header",
+        lambda _p: {"MWF_TIM": "not-a-valid-exam-time"},
+    )
     monkeypatch.setenv("MFER_PROCESSED_FOLDER", str(tmp_path / "processed"))
     monkeypatch.setenv("MFER_ERROR_FOLDER", str(tmp_path / "error"))
 

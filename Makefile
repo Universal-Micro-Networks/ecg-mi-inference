@@ -1,11 +1,17 @@
-.PHONY: help build build-ssh up down logs clean dev dev-ssh reset lint test db-clear-clinical vendor-mfer-tools
+.PHONY: help build build-ssh up down logs clean dev dev-ssh reset lint test db-clear-clinical vendor-mfer-tools vendor-inference-bnp specs-pdf
 
 # Compose v2 推奨（build.ssh は v2 系）。未インストールなら Docker Desktop の CLI を確認してください。
 DOCKER_COMPOSE ?= docker compose
 
 # Docker 用: 非公開 mfer-tools をホストで取得（コミット対象外）
 MFER_TOOLS_GIT_URL ?= https://github.com/tkwataru/mfer-tools.git
-MFER_TOOLS_COMMIT ?= 1012d5ce92ea3279eab975716d6314c8708894b2
+MFER_TOOLS_COMMIT ?= main
+
+# BNP 推論（inference_ecg_bnp）。非公開時は gh auth login 済みの HTTPS または SSH URLを指定
+INFERENCE_ECG_BNP_GIT_URL ?= https://github.com/tkwataru/inference_ecg_bnp.git
+INFERENCE_ECG_BNP_COMMIT ?= main
+PANDOC_IMAGE ?= pandoc/latex:latest
+PANDOC_PLATFORM ?= linux/amd64
 
 # Color output
 BLUE := \033[0;34m
@@ -39,32 +45,53 @@ vendor-mfer-tools: ## Clone mfer-tools into backend/vendor (needed before docker
 		echo "$(GREEN)backend/vendor/mfer-tools を取得しました（commit $(MFER_TOOLS_COMMIT)）$(NC)"; \
 	fi
 
+vendor-inference-bnp: ## vendor に inference_ecg_bnp を clone（Git 依存が使えないオフライン等のフォールバック）
+	@if [ -f backend/vendor/inference_ecg_bnp/pyproject.toml ]; then \
+		echo "$(GREEN)inference_ecg_bnp は既に backend/vendor/inference_ecg_bnp にあります$(NC)"; \
+	else \
+		rm -rf backend/vendor/inference_ecg_bnp && \
+		mkdir -p backend/vendor && \
+		git clone "$(INFERENCE_ECG_BNP_GIT_URL)" backend/vendor/inference_ecg_bnp && \
+		git -C backend/vendor/inference_ecg_bnp checkout "$(INFERENCE_ECG_BNP_COMMIT)" && \
+		touch backend/vendor/inference_ecg_bnp/.gitkeep && \
+		echo "$(GREEN)backend/vendor/inference_ecg_bnp を取得しました（commit $(INFERENCE_ECG_BNP_COMMIT)）$(NC)"; \
+	fi
+
 # Development commands
 dev: ## Start development environment with hot reload
 	@test -f backend/vendor/mfer-tools/pyproject.toml || ( \
-		echo "$(YELLOW)先に mfer-tools を取得してください: make vendor-mfer-tools$(NC)"; \
+		echo "$(YELLOW)Docker ビルドに必要: make vendor-mfer-tools$(NC)"; \
+		exit 1; \
+	)
+	@test -f backend/vendor/inference_ecg_bnp/pyproject.toml || ( \
+		echo "$(YELLOW)Docker ビルドに必要: make vendor-inference-bnp$(NC)"; \
 		exit 1; \
 	)
 	@echo "$(BLUE)Starting development environment...$(NC)"
 	docker-compose up --build
 
-dev-ssh: ## dev と同様だがバックエンドは SSH で mfer-tools をインストール（vendor 不要）
+dev-ssh: ## dev と同様（旧: mfer SSH ビルド。バックエンドは uv.lock の git 依存を使用）
 	DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 $(DOCKER_COMPOSE) \
-		-f docker-compose.yml -f docker-compose.ssh.yml up --build
+		-f docker-compose.yml -f docker-compose.ssh.yml build --ssh default && \
+	DOCKER_BUILDKIT=1 $(DOCKER_COMPOSE) \
+		-f docker-compose.yml -f docker-compose.ssh.yml up
 
 build: ## Build all Docker images
 	@test -f backend/vendor/mfer-tools/pyproject.toml || ( \
-		echo "$(YELLOW)先に mfer-tools を取得してください: make vendor-mfer-tools$(NC)"; \
-		echo "$(YELLOW)（手順: backend/vendor/README.md）$(NC)"; \
+		echo "$(YELLOW)Docker ビルドに必要: make vendor-mfer-tools$(NC)"; \
+		exit 1; \
+	)
+	@test -f backend/vendor/inference_ecg_bnp/pyproject.toml || ( \
+		echo "$(YELLOW)Docker ビルドに必要: make vendor-inference-bnp$(NC)"; \
 		exit 1; \
 	)
 	@echo "$(BLUE)Building Docker images...$(NC)"
 	docker-compose build --no-cache
 
-build-ssh: ## Build images; mfer-tools を BuildKit SSH（git@github.com）で取得（vendor 不要）
+build-ssh: ## Build images（旧: mfer SSH。バックエンドは uv.lock の HTTPS git をビルド時に取得）
 	@echo "$(BLUE)Building Docker images (backend mfer-tools via SSH)...$(NC)"
 	DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 $(DOCKER_COMPOSE) \
-		-f docker-compose.yml -f docker-compose.ssh.yml build --no-cache
+		-f docker-compose.yml -f docker-compose.ssh.yml build --ssh default --no-cache
 
 up: ## Start all services
 	@echo "$(BLUE)Starting services...$(NC)"
@@ -140,6 +167,8 @@ db-clear-clinical: ## Delete all patient, examination, and inference records fro
 		DELETE FROM examinations; \
 		DELETE FROM patients; \
 		VACUUM;"
+	@echo "$(BLUE)Restarting backend to clear in-memory folder-watcher tracked cache...$(NC)"
+	docker-compose restart backend
 	@echo "$(GREEN)Clinical records cleared (patients, examinations, inferences).$(NC)"
 
 # Testing and quality
@@ -210,5 +239,29 @@ reset: ## Reset everything and start fresh
 	make build
 	make up
 	@echo "$(GREEN)Reset complete!$(NC)"
+
+specs-pdf: ## Convert all Markdown under .kiro/specs to PDF
+	@echo "$(BLUE)Converting spec Markdown files to PDF...$(NC)"
+	@mkdir -p .kiro/specs-pdf
+	@files="$$(python3 -c 'import pathlib; [print(str(p)) for p in sorted(pathlib.Path(".kiro/specs").rglob("*.md"))]')"; \
+	if [ -z "$$files" ]; then \
+		echo "$(YELLOW)No markdown files found under .kiro/specs.$(NC)"; \
+		exit 0; \
+	fi; \
+	for f in $$files; do \
+		rel="$${f#.kiro/specs/}"; \
+		out=".kiro/specs-pdf/$${rel%.md}.pdf"; \
+		mkdir -p "$$(dirname "$$out")"; \
+		echo "$(BLUE) -> $$f$(NC)"; \
+		docker run --rm \
+			--platform "$(PANDOC_PLATFORM)" \
+			-v "$$(pwd):/work" \
+			-w /work \
+			"$(PANDOC_IMAGE)" \
+			"$$f" \
+			-o "$$out" \
+			--pdf-engine=xelatex; \
+	done
+	@echo "$(GREEN)PDF export complete: .kiro/specs-pdf$(NC)"
 
 .DEFAULT_GOAL := help

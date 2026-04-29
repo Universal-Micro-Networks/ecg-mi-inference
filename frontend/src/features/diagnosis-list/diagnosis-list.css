@@ -288,6 +288,14 @@
 	line-height: inherit;
 }
 
+.diagnosis-row-link--age-number {
+	text-align: right;
+}
+
+.diagnosis-row-link--age-unknown {
+	text-align: center;
+}
+
 .diagnosis-row-link:focus {
 	outline: none;
 }

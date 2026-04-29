@@ -8,22 +8,34 @@ from collections.abc import Generator
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from .models import Base
 
 logger = logging.getLogger(__name__)
 
-# Use SQLite database in backend/data directory
-DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-os.makedirs(DB_DIR, exist_ok=True)
-DATABASE_URL = f"sqlite:///{os.path.join(DB_DIR, 'ecg_mi.db')}"
+# Default: in-memory SQLite. Set DATABASE_URL to switch to file DB.
+# Example (file): sqlite:////app/data/ecg_mi.db
+DEFAULT_DATABASE_URL = "sqlite:///:memory:"
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL).strip() or DEFAULT_DATABASE_URL
+
+if DATABASE_URL.startswith("sqlite:///") and DATABASE_URL != "sqlite:///:memory:":
+    db_path = DATABASE_URL.removeprefix("sqlite:///")
+    db_dir = os.path.dirname(db_path)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
 
 # Create SQLite engine
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    echo=False,  # Set to True for SQL debugging
-)
+engine_kwargs: dict = {
+    "connect_args": {"check_same_thread": False},
+    "echo": False,  # Set to True for SQL debugging
+}
+
+if DATABASE_URL == "sqlite:///:memory:":
+    # Keep one shared in-memory DB across all sessions in this process.
+    engine_kwargs["poolclass"] = StaticPool
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -61,7 +73,26 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db():
-    """Initialize database with sample data."""
+    """
+    Initialize database with sample data (empty DB only).
+    Default is skip. To enable, set ECG_MI_ENABLE_SAMPLE_DB_SEED=1.
+    ECG_MI_SKIP_SAMPLE_DB_SEED=1 is still honored for backward compatibility.
+    """
+    skip_seed = os.getenv("ECG_MI_SKIP_SAMPLE_DB_SEED", "").lower() in ("1", "true", "yes", "on")
+    enable_seed = os.getenv("ECG_MI_ENABLE_SAMPLE_DB_SEED", "").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    if skip_seed or not enable_seed:
+        logger.info(
+            "init_db: sample seed skipped (enable=%s, skip=%s)",
+            int(enable_seed),
+            int(skip_seed),
+        )
+        return
+
     from datetime import datetime, timedelta
 
     from .models import Examination, Inference, Patient
@@ -116,3 +147,25 @@ def init_db():
     db.add(inference1)
     db.commit()
     db.close()
+
+
+def purge_sensitive_generated_artifacts() -> None:
+    """
+    Security mode: remove persisted generated artifacts.
+    - inferences rows (delete all)
+    - examination ecg_image_etag
+    """
+    from .models import Examination, Inference
+
+    db = SessionLocal()
+    try:
+        db.query(Inference).delete(synchronize_session=False)
+        db.query(Examination).update(
+            {
+                Examination.ecg_image_etag: None,
+            },
+            synchronize_session=False,
+        )
+        db.commit()
+    finally:
+        db.close()

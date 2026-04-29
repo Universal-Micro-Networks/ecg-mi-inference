@@ -3,7 +3,7 @@ export type PatientSummary = {
 	external_id: string;
 	name: string;
 	gender: "男性" | "女性" | string;
-	age: number;
+	age: number | null;
 };
 
 export type ExaminationSummary = {

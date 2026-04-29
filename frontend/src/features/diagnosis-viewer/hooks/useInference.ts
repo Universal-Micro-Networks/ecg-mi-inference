@@ -42,14 +42,10 @@ export const useInference = (
 		if (initial.status) {
 			setStatus(initial.status);
 		}
-		if (
-			initial.status === "完了" &&
-			(initial.risk_level != null || initial.risk_score != null)
-		) {
+		if (initial.status === "完了" && initial.risk_level != null) {
 			setResult({
 				status: "完了",
 				risk_level: initial.risk_level,
-				risk_score: initial.risk_score,
 				executed_at: initial.executed_at,
 			});
 		}

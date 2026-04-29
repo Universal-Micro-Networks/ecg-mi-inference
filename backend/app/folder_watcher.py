@@ -18,6 +18,8 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer as WatchdogObserver
 from watchdog.observers.api import BaseObserver
 
+from .file_importer import FileImporterError
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,6 +45,21 @@ def _is_mfer_file(path: Path) -> bool:
     return path.suffix.lower() == ".mwf"
 
 
+def _resolve_dir_for_compare(raw: str, *, fallback: str) -> Path:
+    p = Path(raw.strip() if raw else fallback).expanduser()
+    if not p.is_absolute():
+        p = Path.cwd() / p
+    return p.resolve()
+
+
+def _is_under(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def _normalize_absolute_watch_path(p: Path) -> Path:
     """絶対パスを正規化。ネットワークドライブ等で resolve が失敗する場合は入力を優先する。"""
     try:
@@ -56,7 +73,7 @@ def _normalize_absolute_watch_path(p: Path) -> Path:
         return p
 
 
-def _resolve_mfer_watch_folder(raw: str) -> Path:
+def _resolve_mfer_watch_folder(raw: str) -> Path | None:
     """
     MFER_WATCH_FOLDER を決定する。
     - 絶対パス: `~` 展開後に resolve（失敗時は指定パスのまま）。UNC（Windows \\\\server\\share\\...）や
@@ -66,7 +83,7 @@ def _resolve_mfer_watch_folder(raw: str) -> Path:
     """
     s = raw.strip()
     if not s:
-        return Path()
+        return None
     p = Path(s).expanduser()
     if p.is_absolute():
         return _normalize_absolute_watch_path(p)
@@ -111,6 +128,14 @@ class _MferEventHandler(FileSystemEventHandler):
 class FolderWatcherService:
     def __init__(self, importer_func: Callable[[str], None]) -> None:
         self.watch_folder = _resolve_mfer_watch_folder(os.getenv("MFER_WATCH_FOLDER", ""))
+        self._processed_dir = _resolve_dir_for_compare(
+            os.getenv("MFER_PROCESSED_FOLDER", ""),
+            fallback="./processed",
+        )
+        self._error_dir = _resolve_dir_for_compare(
+            os.getenv("MFER_ERROR_FOLDER", ""),
+            fallback="./error",
+        )
         self.recursive = _env_bool("MFER_WATCH_RECURSIVE", True)
         self.max_concurrent = _env_int("MFER_MAX_CONCURRENT", 5)
         self.write_wait_interval = _env_int("MFER_WRITE_WAIT_INTERVAL", 2)
@@ -151,7 +176,7 @@ class FolderWatcherService:
             return
         if self._bootstrap_thread and self._bootstrap_thread.is_alive():
             return
-        if not self.watch_folder:
+        if self.watch_folder is None:
             logger.info("folder-watcher disabled: MFER_WATCH_FOLDER is empty")
             return
 
@@ -165,6 +190,8 @@ class FolderWatcherService:
         self._bootstrap_thread.start()
 
     def _bootstrap_and_watch(self) -> None:
+        if self.watch_folder is None:
+            return
         try:
             while not self.watch_folder.exists():
                 logger.error("Watch folder not found: %s. waiting...", self.watch_folder)
@@ -219,6 +246,8 @@ class FolderWatcherService:
 
     def _enqueue_pre_existing_mfer_files(self) -> None:
         """起動時点で既に置いてある .mwf を取り込む（on_created は新規作成のみのため）。"""
+        if self.watch_folder is None:
+            return
         if not self.watch_folder.is_dir():
             return
         if self.recursive:
@@ -263,6 +292,9 @@ class FolderWatcherService:
         if not _is_mfer_file(path):
             logger.debug("ignore non-mfer file: %s", path.name)
             return
+        if _is_under(path, self._processed_dir) or _is_under(path, self._error_dir):
+            logger.debug("ignore mfer already moved to destination: %s", path)
+            return
 
         abs_path = str(path.resolve())
         with self._lock:
@@ -297,6 +329,10 @@ class FolderWatcherService:
             logger.info("file-importer success: %s", path.name)
             with self._lock:
                 self._stats.success += 1
+        except FileImporterError as e:
+            logger.warning("file-importer skipped: %s — %s", path.name, e)
+            with self._lock:
+                self._stats.failed += 1
         except Exception:
             logger.exception("file-importer failed: %s", path.name)
             with self._lock:
@@ -350,7 +386,7 @@ class FolderWatcherService:
                 "watching": self._stats.started,
                 "bootstrap_pending": boot and not self._stats.started,
                 "use_polling_observer": self._observer_uses_polling,
-                "folder": str(self.watch_folder),
+                "folder": str(self.watch_folder) if self.watch_folder is not None else "",
                 "detected": self._stats.detected,
                 "success": self._stats.success,
                 "failed": self._stats.failed,

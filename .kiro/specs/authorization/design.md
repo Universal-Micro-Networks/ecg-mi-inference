@@ -54,9 +54,11 @@
 
 ### 初期パスワード設定導線
 
-- **採用（初期）**: 起動時に `system_config` に `system_password` が無い場合、
-  - 環境変数 `INITIAL_ADMIN_PASSWORD` があればそれを bcrypt 化して保存し起動継続
-  - 無い場合は **起動エラー（明示的に設定を要求）** とする（初期設定画面は非ゴール）
+- **採用**: `system_config.system_password` が未設定の場合、UI から bootstrap で初回設定する
+- **API**:
+  - `GET /api/auth/bootstrap-status` → `{ requires_setup: boolean }`
+  - `POST /api/auth/bootstrap` → 未設定時のみ `new_password` を保存（設定済みは 403）
+- **非採用**: `INITIAL_ADMIN_PASSWORD` 環境変数での初期投入
 
 ## レビュー観点（承認チェックリスト）
 
@@ -68,7 +70,7 @@ sdd-cc で Design 承認するための確認項目。
 - **XSS 低減**: `localStorage` 採用のリスクと運用前提（CSP 等）が明記されている
 - **CSRF**: Cookie 方式を採用する場合のみ設計に含める方針になっている
 - **ログアウト**: access token の `jti` をブラックリスト登録して失効扱いにする設計になっている
-- **初期パスワード**: `INITIAL_ADMIN_PASSWORD` が無い場合の起動時挙動（起動エラー）が運用上許容できる
+- **初期パスワード**: bootstrap API でのみ初回設定され、設定済み後は再設定を拒否する
 
 ### API/UX
 
@@ -386,10 +388,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps>;
 
 | Method | Endpoint | Request | Response | Errors |
 |--------|----------|---------|----------|--------|
-| POST | /api/v1/auth/login | LoginRequest | TokenResponse | 401, 422 |
-| POST | /api/v1/auth/refresh | RefreshRequest | AccessTokenResponse | 401 |
-| POST | /api/v1/auth/logout | - | MessageResponse | 401 |
-| PUT | /api/v1/auth/password | ChangePasswordRequest | MessageResponse | 401, 422 |
+| GET | /api/auth/bootstrap-status | - | BootstrapStatusResponse | - |
+| POST | /api/auth/bootstrap | BootstrapRequest | MessageResponse | 403, 422 |
+| POST | /api/auth/login | LoginRequest | TokenResponse | 401, 403, 422 |
+| POST | /api/auth/refresh | RefreshRequest | AccessTokenResponse | 401 |
+| POST | /api/auth/logout | - | MessageResponse | 401 |
+| PUT | /api/auth/password | ChangePasswordRequest | MessageResponse | 401, 422 |
 
 ---
 
@@ -674,6 +678,12 @@ CREATE INDEX idx_token_blacklist_expires_at ON token_blacklist(expires_at);
 class LoginRequest(BaseModel):
     password: str = Field(..., min_length=1)
 
+class BootstrapStatusResponse(BaseModel):
+    requires_setup: bool
+
+class BootstrapRequest(BaseModel):
+    new_password: str = Field(..., min_length=8)
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -708,6 +718,8 @@ class ErrorResponse(BaseModel):
 | エラー種別 | HTTPステータス | レスポンス | UI対応 |
 |-----------|---------------|-----------|--------|
 | パスワード誤り | 401 | `{"detail": "パスワードが正しくありません"}` | エラーメッセージ表示、パスワードクリア |
+| 未初期化ログイン | 403 | `{"detail": "管理者パスワードが未設定です"}` | 初回セットアップ画面（フォーム）を表示 |
+| bootstrap 済み再実行 | 403 | `{"detail": "管理者パスワードは既に設定されています"}` | 通常ログインへ誘導 |
 | トークン期限切れ | 401 | `{"detail": "セッションの有効期限が切れました"}` | ログイン画面へリダイレクト |
 | トークン無効 | 401 | `{"detail": "認可が必要です"}` | ログイン画面へリダイレクト |
 | パスワードポリシー違反 | 422 | `{"detail": "パスワードは8文字以上..."}` | バリデーションエラー表示 |
@@ -810,26 +822,12 @@ backend/app/
 
 ### 初期パスワード設定
 
-システムの初回起動時に、管理者パスワードを設定する必要がある。
-
-**設定方法**:
-
-```bash
-# 方法1: 環境変数で初期パスワードを指定
-INITIAL_ADMIN_PASSWORD="SecureP@ssw0rd" docker compose up -d
-
-# 方法2: CLIツールで設定（本番環境推奨）
-cd backend
-python -m app.cli set-password
-# インタラクティブにパスワードを入力
-```
+システム初回利用時にログイン画面で管理者パスワードを設定する。
 
 **初期化フロー**:
-1. システム起動時に `system_config` テーブルの `system_password` を確認
-2. 未設定の場合:
-   - 環境変数 `INITIAL_ADMIN_PASSWORD` があれば使用
-   - なければ初期設定画面を表示（または起動エラー）
-3. パスワードはbcryptでハッシュ化してDBに保存
+1. ログイン画面表示時に `GET /api/auth/bootstrap-status` を呼ぶ
+2. `requires_setup=true` の場合、初回パスワード入力フォームを表示
+3. `POST /api/auth/bootstrap` で設定成功後、通常ログインを実行
 
 ### 環境変数
 
@@ -838,7 +836,6 @@ python -m app.cli set-password
 | `JWT_SECRET_KEY` | ✓ | - | JWTトークン署名用シークレット（32文字以上推奨） |
 | `JWT_ACCESS_TOKEN_EXPIRE_HOURS` | - | 8 | アクセストークン有効期限（時間） |
 | `JWT_REFRESH_TOKEN_EXPIRE_HOURS` | - | 24 | リフレッシュトークン有効期限（時間） |
-| `INITIAL_ADMIN_PASSWORD` | - | - | 初回起動時の管理者パスワード |
 | `PASSWORD_MIN_LENGTH` | - | 8 | パスワード最小文字数 |
 
 ### ドキュメント参照
